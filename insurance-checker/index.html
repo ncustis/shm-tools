@@ -186,8 +186,9 @@
     .cov-item{grid-template-columns:22px 1fr;}
     .cov-actions{grid-column:2;margin-top:3px;}
   }
+  @page{size:auto;margin:0mm;}
   @media print{
-    body{background:white !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    body{background:white !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:0.4in 0.5in;}
     .header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .config-banner,.nav-bar,.footer,.processing,.error-msg,
     #save-prompt,#save-confirm,
