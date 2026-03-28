@@ -194,6 +194,7 @@
     #save-prompt,#save-confirm,
     #dashboard-view,
     #checkin-view,
+    #reports-view,
     .cov-edit-btn,.cov-except-btn,
     #check-view > .card:first-child{display:none !important;}
     /* Force check view and report visible */
@@ -239,6 +240,10 @@
     <div class="nav-tab" onclick="switchView('check')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       New Insurance Check
+    </div>
+    <div class="nav-tab" onclick="switchView('reports')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      Property Logbook
     </div>
   </div>
 </div>
@@ -398,7 +403,10 @@
     </div>
 
     <div class="card" style="margin-top:1rem;">
-      <div class="card-title" style="margin-bottom:0.75rem;">Currently On Property</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:0.75rem;">
+        <div class="card-title" style="margin-bottom:0;">Currently On Property</div>
+        <div class="sdrop" style="width:220px;"><input type="text" class="sdrop-input sm" id="onsite-filter-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="onsite-prop-sdrop-list"></div></div>
+      </div>
       <div id="checkin-onsite-area"></div>
     </div>
   </div>
@@ -420,10 +428,55 @@
             <option value="NON-COMPLIANT">Non-Compliant</option>
           </select>
           <button class="btn btn-outline btn-sm" onclick="exportDashboardCSV()">Export All</button>
-          <button class="btn btn-outline btn-sm" style="color:var(--fail);" onclick="if(confirm('Clear all records?')){clearAllRecords();}">Clear All</button>
+          <button class="btn btn-outline btn-sm" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
       </div>
       <div id="dash-table-area"></div>
+    </div>
+  </div>
+  <!-- ════ REPORTS VIEW ════ -->
+  <div class="view" id="reports-view">
+    <div class="card">
+      <div class="card-title">Property Logbook</div>
+      <div class="card-subtitle">Generate a log of all vendor check-ins and check-outs for a property. Export to Excel for record-keeping.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Property Name</label>
+          <div class="sdrop"><input type="text" class="sdrop-input" id="report-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="report-prop-sdrop-list"></div></div>
+        </div>
+        <div>
+          <label class="form-label">From Date</label>
+          <input type="date" class="form-input" id="report-from" style="margin-bottom:0;" />
+        </div>
+        <div>
+          <label class="form-label">To Date</label>
+          <input type="date" class="form-input" id="report-to" style="margin-bottom:0;" />
+        </div>
+      </div>
+      <div style="margin-top:0.75rem;">
+        <label class="form-label">Vendor Name(s)</label>
+        <div class="sdrop"><input type="text" class="sdrop-input" id="report-vendor" placeholder="All Vendors" autocomplete="off" /><div class="sdrop-list" id="report-vendor-sdrop-list"></div></div>
+      </div>
+      <div style="margin-top:1.25rem;display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="generateLogbook()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Generate Report
+        </button>
+        <button class="btn btn-gold" id="btn-export-logbook" onclick="exportLogbookExcel()" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export to Excel
+        </button>
+        <button class="btn btn-outline" onclick="clearLogbook()">Clear</button>
+      </div>
+    </div>
+    <div id="logbook-results" style="display:none;margin-top:1rem;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+          <div class="card-title" style="margin-bottom:0;" id="logbook-title">Logbook Results</div>
+          <div style="font-size:0.82rem;color:var(--text-muted);" id="logbook-count"></div>
+        </div>
+        <div id="logbook-table-area"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -451,7 +504,7 @@ function getRequirementsText(type) {
 
 // ═══ NAV ═══
 function switchView(v) {
-  var tabMap = {"dashboard":0, "checkin":1, "check":2};
+  var tabMap = {"dashboard":0, "checkin":1, "check":2, "reports":3};
   document.querySelectorAll(".nav-tab").forEach(function(t, i) { t.classList.toggle("active", tabMap[v] === i); });
   document.querySelectorAll(".view").forEach(function(el) { el.classList.remove("active"); });
   document.getElementById(v + "-view").classList.add("active");
@@ -459,6 +512,7 @@ function switchView(v) {
   if (v === "dashboard") { main.classList.add("full-width"); main.classList.remove("narrow"); renderDashboard(); }
   else { main.classList.remove("full-width"); main.classList.add("narrow"); }
   if (v === "checkin") renderCheckinOnsite();
+  if (v === "reports") initReportsDropdowns();
 }
 
 // ═══ FORM ═══
@@ -1254,6 +1308,12 @@ function saveRecord(property, type, result) {
   saveRecords(recs);
 }
 function clearAllRecords() { saveRecords([]); renderDashboard(); updateAlertBadge(); }
+function clearDashboardFilters() {
+  document.getElementById("dash-filter-property").value = "";
+  document.getElementById("dash-filter-vendor").value = "";
+  document.getElementById("dash-filter-status").value = "";
+  renderDashboard();
+}
 
 function updateAlertBadge() {
   // Badge removed from UI — function kept for compatibility
@@ -1319,9 +1379,9 @@ function renderDashboard() {
     (r.coverages || []).forEach(function(c) { if (c.exception) exceptions.push(c.coverage_name || ""); });
     (r.endorsements || []).forEach(function(e) { if (e.exception) exceptions.push(e.endorsement_name || ""); });
     var exceptionsStr = exceptions.length ? exceptions.join("; ") : "\u2014";
-    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'><button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
+    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'><button class='btn btn-sm btn-primary' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"checkinFromDash('" + r.id + "')\">Check‑In</button> <button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
   }).join("");
-  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Checked</th><th>Non-Compliance Reasons</th><th>Exceptions</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Insurance Checked On</th><th>Non-Compliance Reasons</th><th>Exceptions</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 // ═══ RENEW & DELETE ═══
@@ -1397,6 +1457,17 @@ saveRecord = function(property, type, result) {
   }
 };
 
+
+function checkinFromDash(id) {
+  var recs = getRecords();
+  var rec = recs.find(function(r) { return r.id === id; });
+  if (!rec) return;
+  switchView("checkin");
+  document.getElementById("checkin-property").value = rec.property;
+  document.getElementById("checkin-vendor").value = rec.contractor;
+  updateCheckinVendorStatus();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 // ═══ EXPORT ═══
 function exportReport() {
   if (!lastResult) return;
@@ -1665,7 +1736,9 @@ function checkoutVendor(id) {
 
 function renderCheckinOnsite() {
   var recs = getCheckins();
+  var fp = document.getElementById("onsite-filter-property").value.trim();
   var onsite = recs.filter(function(r) { return r.checkin && !r.checkout; });
+  if (fp && MARINA_NAMES.indexOf(fp) !== -1) onsite = onsite.filter(function(r) { return r.property === fp; });
   var area = document.getElementById("checkin-onsite-area");
   if (!onsite.length) {
     area.innerHTML = "<div style=\"text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;\">No vendors currently checked in.</div>";
@@ -1716,6 +1789,132 @@ document.getElementById("checkin-vendor").addEventListener("input", function() {
 document.getElementById("checkin-property").addEventListener("input", function() { updateCheckinVendorStatus(); checkCheckinReady(); });
 document.getElementById("checkin-datetime").addEventListener("input", checkCheckinReady);
 document.getElementById("checkout-datetime").addEventListener("input", checkCheckinReady);
+
+
+// ═══ ONSITE PROPERTY FILTER ═══
+var onsitePropSdrop = initSdrop("onsite-filter-property", "onsite-prop-sdrop-list", MARINA_NAMES, {
+  allLabel: "All Properties", small: true, onSelect: function() { renderCheckinOnsite(); }
+});
+
+// ═══ PROPERTY LOGBOOK / REPORTS ═══
+var reportsPropInited = false;
+function initReportsDropdowns() {
+  if (reportsPropInited) return;
+  reportsPropInited = true;
+  initSdrop("report-property", "report-prop-sdrop-list", MARINA_NAMES, {
+    allLabel: "All Properties", onSelect: function() {}
+  });
+  initSdrop("report-vendor", "report-vendor-sdrop-list", getUniqueVendors().concat(getCheckinVendorNames()), {
+    allLabel: "All Vendors", onSelect: function() {}
+  });
+}
+
+function getCheckinVendorNames() {
+  var recs = getCheckins();
+  var names = {};
+  recs.forEach(function(r) { if (r.vendor) names[r.vendor] = true; });
+  return Object.keys(names).sort();
+}
+
+function generateLogbook() {
+  var prop = document.getElementById("report-property").value.trim();
+  var fromDate = document.getElementById("report-from").value;
+  var toDate = document.getElementById("report-to").value;
+  var vendorFilter = document.getElementById("report-vendor").value.trim();
+
+  var recs = getCheckins();
+
+  // Filter
+  if (prop && MARINA_NAMES.indexOf(prop) !== -1) recs = recs.filter(function(r) { return r.property === prop; });
+  if (vendorFilter) recs = recs.filter(function(r) { return r.vendor && r.vendor.toLowerCase().indexOf(vendorFilter.toLowerCase()) !== -1; });
+  if (fromDate) recs = recs.filter(function(r) { return r.checkin && r.checkin >= fromDate; });
+  if (toDate) {
+    var toEnd = toDate + "T23:59";
+    recs = recs.filter(function(r) { return r.checkin && r.checkin <= toEnd; });
+  }
+
+  // Sort by check-in descending
+  recs.sort(function(a, b) { return new Date(b.checkin) - new Date(a.checkin); });
+
+  var resultsDiv = document.getElementById("logbook-results");
+  var area = document.getElementById("logbook-table-area");
+  var countEl = document.getElementById("logbook-count");
+  var titleEl = document.getElementById("logbook-title");
+
+  if (!recs.length) {
+    resultsDiv.style.display = "block";
+    titleEl.textContent = "Logbook Results";
+    countEl.textContent = "0 records";
+    area.innerHTML = "<div style=\"text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;\">No check-in records found for the selected filters.</div>";
+    document.getElementById("btn-export-logbook").style.display = "none";
+    return;
+  }
+
+  titleEl.textContent = prop ? "Logbook: " + prop : "Logbook: All Properties";
+  countEl.textContent = recs.length + " record" + (recs.length !== 1 ? "s" : "");
+
+  var rows = recs.map(function(r) {
+    var ciDt = r.checkin ? new Date(r.checkin).toLocaleString("en-US", {month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : "\u2014";
+    var coDt = r.checkout ? new Date(r.checkout).toLocaleString("en-US", {month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : "<span style=\"color:var(--warn);\">Still on site</span>";
+    var vc = r.compliance === "COMPLIANT" ? "pass" : r.compliance === "COMPLIANT WITH EXCEPTION" ? "exception" : r.compliance === "UNVALIDATED" ? "warn" : "fail";
+    var feeDisplay = r.reason === "Marine Work (Retained by Member)" ? esc(r.fees || "\u2014") : "\u2014";
+    var annotation = r.unvalidated ? "<span style=\"color:var(--warn);font-size:0.7rem;display:block;\">\u26A0 Checked in without insurance validation</span>" : "";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + annotation + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + feeDisplay + "</td></tr>";
+  }).join("");
+
+  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Fees Paid</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  resultsDiv.style.display = "block";
+  document.getElementById("btn-export-logbook").style.display = "inline-flex";
+
+  // Store filtered data for export
+  window._logbookData = recs;
+}
+
+function exportLogbookExcel() {
+  var recs = window._logbookData || [];
+  if (!recs.length) return;
+
+  var rows = [["Property", "Vendor", "Compliance Status", "Reason for Visit", "Check-In", "Check-Out", "Access Fees Paid", "Insurance Expiration", "Access Agreement", "Unvalidated"]];
+  recs.forEach(function(r) {
+    var ciDt = r.checkin ? new Date(r.checkin).toLocaleString("en-US") : "";
+    var coDt = r.checkout ? new Date(r.checkout).toLocaleString("en-US") : "Still on site";
+    var fees = r.reason === "Marine Work (Retained by Member)" ? (r.fees || "") : "N/A";
+    rows.push([
+      r.property,
+      r.vendor,
+      r.compliance,
+      r.reason || "",
+      ciDt,
+      coDt,
+      fees,
+      r.expiration || "",
+      r.access_agreement ? "Yes" : "No",
+      r.unvalidated ? "YES - No insurance on file" : ""
+    ]);
+  });
+
+  // Build CSV (Excel-compatible)
+  var csv = "\uFEFF" + rows.map(function(row) {
+    return row.map(function(c) { return '"' + String(c || "").replace(/"/g, '""') + '"'; }).join(",");
+  }).join("\n");
+
+  var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  var prop = document.getElementById("report-property").value.trim();
+  var dateSuffix = new Date().toISOString().slice(0, 10);
+  a.download = (prop ? prop.replace(/[^a-zA-Z0-9]/g, "_") : "All_Properties") + "_Logbook_" + dateSuffix + ".csv";
+  a.click();
+}
+
+function clearLogbook() {
+  document.getElementById("report-property").value = "";
+  document.getElementById("report-from").value = "";
+  document.getElementById("report-to").value = "";
+  document.getElementById("report-vendor").value = "";
+  document.getElementById("logbook-results").style.display = "none";
+  document.getElementById("btn-export-logbook").style.display = "none";
+}
 
 
 updateAlertBadge();
