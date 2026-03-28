@@ -187,10 +187,24 @@
     .cov-actions{grid-column:2;margin-top:3px;}
   }
   @media print{
-    body{background:white;}
-    .header{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
-    .nav-bar,.config-banner,#check-view .card:first-child,.btn,.processing,.footer{display:none !important;}
+    body{background:white !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .config-banner,.nav-bar,.footer,.processing,.error-msg,
+    #save-prompt,#save-confirm,
+    #dashboard-view,
+    .cov-edit-btn,.cov-except-btn,
+    #check-view > .card:first-child{display:none !important;}
+    /* Force check view and report visible */
+    .view{display:block !important;}
+    #report-section{display:block !important;}
+    .main{max-width:100% !important;padding:1rem 1.5rem !important;}
     .card{box-shadow:none;border:1px solid #ddd;}
+    .btn{display:none !important;}
+    /* Keep verdict badge visible */
+    .verdict-badge{display:inline-flex !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .report-header{display:flex !important;}
+    .report-header h2{display:block !important;}
+    .cov-icon,.cov-status,.pill,.meta-item{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   }
 </style>
 </head>
@@ -214,7 +228,7 @@
   <div class="nav-inner">
     <div class="nav-tab active" onclick="switchView('dashboard')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      Vendor Status Dashboard
+      Dashboard
     </div>
     <div class="nav-tab" onclick="switchView('check')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -297,7 +311,6 @@
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <div class="verdict-badge" id="verdict-badge"></div>
             <button class="btn btn-outline btn-sm" onclick="window.print()">Print</button>
-            <button class="btn btn-gold btn-sm" onclick="exportReport()">Export CSV</button>
           </div>
         </div>
         <div class="report-meta" id="report-meta"></div>
@@ -306,16 +319,13 @@
           <h4>Additional Notes &amp; Observations</h4>
           <ul id="notes-list"></ul>
         </div>
+        <div id="save-prompt" style="display:none;justify-content:center;gap:12px;flex-wrap:wrap;padding:1.25rem;margin-top:1.5rem;border-top:2px solid var(--warm-gray-dark);">
+          <button class="btn btn-sm" onclick="addToDashboard()" style="background:var(--pass);color:white;padding:0.65rem 2rem;font-size:0.88rem;">&#x2713; Accept</button>
+          <button class="btn btn-sm" onclick="skipDashboard()" style="background:var(--fail);color:white;padding:0.65rem 2rem;font-size:0.88rem;">&#x2717; Remove</button>
+        </div>
       </div>
     </div>
 
-    <div id="save-prompt" style="display:none;justify-content:center;gap:12px;flex-wrap:wrap;padding:1rem 0;">
-      <button class="btn btn-primary" onclick="addToDashboard()" style="gap:8px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        Add to Vendor Status Dashboard
-      </button>
-      <button class="btn btn-outline" onclick="skipDashboard()">Do Not Add to Dashboard</button>
-    </div>
     <div id="save-confirm" style="display:none;text-align:center;padding:0.75rem;font-size:0.85rem;font-weight:600;color:var(--pass);background:var(--pass-bg);border-radius:8px;margin-bottom:1rem;"></div>
 
   </div>
@@ -323,7 +333,7 @@
     <div class="dash-stats" id="dash-stats"></div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
-        <div class="card-title" style="margin-bottom:0;">Vendor Status Dashboard</div>
+        <div class="card-title" style="margin-bottom:0;">Dashboard</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <div class="sdrop" style="width:220px;"><input type="text" class="sdrop-input sm" id="dash-filter-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="dash-prop-sdrop-list"></div></div>
           <div class="sdrop" style="width:200px;"><input type="text" class="sdrop-input sm" id="dash-filter-vendor" placeholder="All Vendors" autocomplete="off" /><div class="sdrop-list" id="dash-vendor-sdrop-list"></div></div>
@@ -928,7 +938,7 @@ function addToDashboard() {
   updateAlertBadge();
   // Brief confirmation
   var el = document.getElementById("save-confirm");
-  el.textContent = "\u2713 Added to Vendor Status Dashboard";
+  el.textContent = "\u2713 Added to Dashboard";
   el.style.display = "block";
   setTimeout(function() { el.style.display = "none"; }, 3000);
 }
@@ -936,7 +946,7 @@ function addToDashboard() {
 function skipDashboard() {
   document.getElementById("save-prompt").style.display = "none";
   var el = document.getElementById("save-confirm");
-  el.textContent = "Not added to dashboard — this check is for review only.";
+  el.textContent = "Removed — this check was not saved to the dashboard.";
   el.style.display = "block";
   setTimeout(function() { el.style.display = "none"; }, 3000);
 }
@@ -1204,7 +1214,7 @@ function renderDashboard() {
 
   var area = document.getElementById("dash-table-area");
   if (!filtered.length) {
-    area.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><h3>No compliance records yet</h3><p>Run a certificate check from "New Check" to start building your vendor dashboard.</p></div>';
+    area.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><h3>No compliance records yet</h3><p>Run a certificate check from "New Check" to start building your dashboard.</p></div>';
     return;
   }
   filtered.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
