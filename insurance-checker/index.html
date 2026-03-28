@@ -406,6 +406,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:0.75rem;">
         <div class="card-title" style="margin-bottom:0;">Currently On Property</div>
         <div class="sdrop" style="width:220px;"><input type="text" class="sdrop-input sm" id="onsite-filter-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="onsite-prop-sdrop-list"></div></div>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('onsite-filter-property').value='';renderCheckinOnsite();">Clear Filters</button>
       </div>
       <div id="checkin-onsite-area"></div>
     </div>
@@ -1379,7 +1380,14 @@ function renderDashboard() {
     (r.coverages || []).forEach(function(c) { if (c.exception) exceptions.push(c.coverage_name || ""); });
     (r.endorsements || []).forEach(function(e) { if (e.exception) exceptions.push(e.endorsement_name || ""); });
     var exceptionsStr = exceptions.length ? exceptions.join("; ") : "\u2014";
-    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'><button class='btn btn-sm btn-primary' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"checkinFromDash('" + r.id + "')\">Check‑In</button> <button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
+    // Check if vendor is currently on site
+    var checkins = getCheckins();
+    var isOnsite = checkins.some(function(ci) { return ci.property === r.property && ci.vendor === r.contractor && ci.checkin && !ci.checkout; });
+    var onsiteRec = isOnsite ? checkins.find(function(ci) { return ci.property === r.property && ci.vendor === r.contractor && ci.checkin && !ci.checkout; }) : null;
+    var checkinBtn = isOnsite
+      ? "<button class='btn btn-sm' style='padding:0.3rem 0.6rem;font-size:0.7rem;background:var(--pass);color:white;' onclick=\"checkoutVendor('" + onsiteRec.id + "');renderDashboard();\">Check‑Out</button>"
+      : "<button class='btn btn-sm btn-primary' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"checkinFromDash('" + r.id + "')\">Check‑In</button>";
+    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'>" + checkinBtn + " <button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
   }).join("");
   area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Insurance Checked On</th><th>Non-Compliance Reasons</th><th>Exceptions</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
@@ -1594,6 +1602,12 @@ renderDashboard = function() {
 // ═══ VENDOR CHECK IN/OUT ═══
 var CHECKIN_KEY = "shm-checkin-records";
 
+// Local datetime string (avoids UTC offset from toISOString)
+function localNow() {
+  var d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0") + "T" + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+
 function getCheckins() { try { return JSON.parse(localStorage.getItem(CHECKIN_KEY) || "[]"); } catch(e) { return []; } }
 function saveCheckins(recs) { localStorage.setItem(CHECKIN_KEY, JSON.stringify(recs)); }
 
@@ -1639,9 +1653,7 @@ function updateCheckinVendorStatus() {
   // Auto-populate check-in time if empty
   var dtField = document.getElementById("checkin-datetime");
   if (!dtField.value) {
-    var now = new Date();
-    var local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    dtField.value = local;
+    dtField.value = localNow();
   }
   checkCheckinReady();
 }
@@ -1727,7 +1739,7 @@ function checkoutVendor(id) {
   var recs = getCheckins();
   var rec = recs.find(function(r) { return r.id === id; });
   if (rec) {
-    rec.checkout = new Date().toISOString().slice(0, 16);
+    rec.checkout = localNow();
     saveCheckins(recs);
     renderCheckinOnsite();
     renderDashboardOnsite();
@@ -1858,11 +1870,13 @@ function generateLogbook() {
     var coDt = r.checkout ? new Date(r.checkout).toLocaleString("en-US", {month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}) : "<span style=\"color:var(--warn);\">Still on site</span>";
     var vc = r.compliance === "COMPLIANT" ? "pass" : r.compliance === "COMPLIANT WITH EXCEPTION" ? "exception" : r.compliance === "UNVALIDATED" ? "warn" : "fail";
     var feeDisplay = r.reason === "Marine Work (Retained by Member)" ? esc(r.fees || "\u2014") : "\u2014";
-    var annotation = r.unvalidated ? "<span style=\"color:var(--warn);font-size:0.7rem;display:block;\">\u26A0 Checked in without insurance validation</span>" : "";
-    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + annotation + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + feeDisplay + "</td></tr>";
+    var expDisplay = r.expiration || "\u2014";
+    var agrDisplay = r.access_agreement ? "<span style=\"color:var(--pass);\">\u2713 Yes</span>" : "<span style=\"color:var(--fail);\">\u2717 No</span>";
+    var flagDisplay = r.unvalidated ? "<span style=\"color:var(--warn);\">\u26A0 No insurance on file</span>" : "\u2014";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + feeDisplay + "</td><td>" + expDisplay + "</td><td>" + agrDisplay + "</td><td style=\"font-size:0.75rem;\">" + flagDisplay + "</td></tr>";
   }).join("");
 
-  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Fees Paid</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Fees Paid</th><th>Insurance Exp.</th><th>Access Agmt.</th><th>Flags</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
   resultsDiv.style.display = "block";
   document.getElementById("btn-export-logbook").style.display = "inline-flex";
 
@@ -1874,7 +1888,7 @@ function exportLogbookExcel() {
   var recs = window._logbookData || [];
   if (!recs.length) return;
 
-  var rows = [["Property", "Vendor", "Compliance Status", "Reason for Visit", "Check-In", "Check-Out", "Access Fees Paid", "Insurance Expiration", "Access Agreement", "Unvalidated"]];
+  var rows = [["Property", "Vendor", "Status at Check-In", "Reason", "Check-In", "Check-Out", "Fees Paid", "Insurance Exp.", "Access Agmt.", "Flags"]];
   recs.forEach(function(r) {
     var ciDt = r.checkin ? new Date(r.checkin).toLocaleString("en-US") : "";
     var coDt = r.checkout ? new Date(r.checkout).toLocaleString("en-US") : "Still on site";
@@ -1889,7 +1903,7 @@ function exportLogbookExcel() {
       fees,
       r.expiration || "",
       r.access_agreement ? "Yes" : "No",
-      r.unvalidated ? "YES - No insurance on file" : ""
+      r.unvalidated ? "No insurance on file" : ""
     ]);
   });
 
