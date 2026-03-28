@@ -601,21 +601,7 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════
-// CONFIGURATION — Change this when you set up the proxy
-// ═══════════════════════════════════════════════════
-const API_ENDPOINT = "https://api.anthropic.com/v1/messages";
-// When you deploy a Cloudflare Worker or other proxy, change to:
-// const API_ENDPOINT = "https://your-worker.your-subdomain.workers.dev/api/analyze";
-
-// Show config warning if not proxied and not in Claude sandbox
-if (ANALYSIS_MODE === "demo") {
-  document.getElementById("config-banner").classList.add("show");
-}
-
-// ═══════════════════════════════════════════════════
-const STORAGE_KEY = "shm-insurance-records";
-let selectedType = null, uploadedFile = null, lastResult = null;
+// Config banner shown after ANALYSIS_MODE is set (see below)
 
 const REQUIREMENTS = {
   type1: { label: "Type 1 Marine Contractor", description: "General marine work" },
@@ -717,6 +703,13 @@ async function extractTextFromPDF(file) {
 // "live" = AI-powered via API proxy
 var ANALYSIS_MODE = "demo";
 var API_ENDPOINT = "https://YOUR-WORKER.workers.dev/api/analyze";
+var STORAGE_KEY = "shm-insurance-records";
+var selectedType = null, uploadedFile = null, lastResult = null;
+
+// Show demo banner
+if (ANALYSIS_MODE === "demo") {
+  document.getElementById("config-banner").classList.add("show");
+}
 
 var SYSTEM_PROMPT = 'You are an insurance compliance analyst for Safe Harbor Marinas. Respond with ONLY valid JSON.';
 
