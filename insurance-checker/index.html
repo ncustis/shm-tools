@@ -715,18 +715,47 @@ var SYSTEM_PROMPT = 'You are an insurance compliance analyst for Safe Harbor Mar
 
 // ═══ CLIENT-SIDE PARSER (Demo Mode) ═══
 function findDollarNear(text, keyword, radius) {
-  var idx = text.toLowerCase().indexOf(keyword.toLowerCase());
+  var t = text.toLowerCase();
+  var kw = keyword.toLowerCase();
+  // Try regex keywords
+  var idx = -1;
+  if (kw.indexOf(".*") !== -1) {
+    try { var m = new RegExp(kw, "i").exec(text); if (m) idx = m.index; } catch(e) {}
+  } else {
+    idx = t.indexOf(kw);
+  }
   if (idx === -1) return null;
-  var r = radius || 200;
-  var nearby = text.substring(Math.max(0, idx - 40), Math.min(text.length, idx + r));
+  // Search a wide radius — ACORD form text extraction scatters values
+  var r = radius || 400;
+  var nearby = text.substring(Math.max(0, idx - 80), Math.min(text.length, idx + r));
   var amounts = [];
-  var re = /\$?\s?(\d{1,3}(?:,\d{3})*)/g;
-  var m;
-  while ((m = re.exec(nearby)) !== null) {
-    var val = parseInt(m[1].replace(/,/g, ""));
+  var re = /\$?\s?(\d{1,3}(?:,\d{3})+)/g;
+  var match;
+  while ((match = re.exec(nearby)) !== null) {
+    var val = parseInt(match[1].replace(/,/g, ""));
     if (val >= 1000) amounts.push(val);
   }
-  return amounts.length > 0 ? amounts[0] : null;
+  // Also catch numbers like "1000000" without commas
+  var re2 = /(\d{5,})/g;
+  while ((match = re2.exec(nearby)) !== null) {
+    var val2 = parseInt(match[1]);
+    if (val2 >= 5000 && amounts.indexOf(val2) === -1) amounts.push(val2);
+  }
+  // Return the largest amount found (most likely the coverage limit, not a deductible)
+  if (amounts.length === 0) return null;
+  amounts.sort(function(a, b) { return b - a; });
+  return amounts[0];
+}
+
+// Fallback: scan entire text for all dollar amounts and try to match by typical ACORD positions
+function findAllAmounts(text) {
+  var amounts = [];
+  var re = /\$?\s?(\d{1,3}(?:,\d{3})+)/g;
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    amounts.push(parseInt(m[1].replace(/,/g, "")));
+  }
+  return amounts.filter(function(v) { return v >= 1000; });
 }
 
 function textHas(text, keywords) {
@@ -810,15 +839,26 @@ function parseCertificateText(text, type) {
     ];
   }
 
-  // Parse coverages
+  // Parse coverages — use wide search since pdf.js scrambles ACORD layout
   covReqs.forEach(function(cr) {
     if (cr.wc) {
       var has = textHas(t, cr.kw);
       result.coverages.push({ coverage_name: cr.name, status: has ? "PASS" : (cr.ifApp ? "NEEDS REVIEW" : "NOT FOUND"), required_limit: "Statutory", found_limit: has ? "Statutory limits indicated" : "Not found", detail: has ? "Workers compensation coverage found" : "Not found on certificate — may not be applicable" });
       return;
     }
+    // Try multiple search radii — wider for less common terms
     var found = null;
-    for (var k = 0; k < cr.kw.length; k++) { found = findDollarNear(t, cr.kw[k], 200); if (found) break; }
+    for (var k = 0; k < cr.kw.length; k++) {
+      found = findDollarNear(t, cr.kw[k], 500);
+      if (found) break;
+    }
+    // Fallback: if the required amount appears ANYWHERE in the text, and the keyword exists, assume it matches
+    if (!found && textHas(t, cr.kw)) {
+      var allAmounts = findAllAmounts(t);
+      for (var a = 0; a < allAmounts.length; a++) {
+        if (allAmounts[a] === cr.req) { found = cr.req; break; }
+      }
+    }
     var status, detail;
     if (found) {
       if (found >= cr.req) { status = "PASS"; detail = "Meets required limit"; }
@@ -993,6 +1033,7 @@ function buildCovRow(type, idx, item) {
   var name = item.coverage_name || item.endorsement_name || "";
   var hasReq = item.required_limit && item.required_limit !== "\u2014";
   var hasFound = item.found_limit && item.found_limit !== "\u2014";
+  var showExceptBtn = isFail || hasExc; // Show when failing OR when exception is active (to allow removal)
   return '<div class="cov-item">' +
     '<div class="cov-icon ' + s + '">' + icon + '</div>' +
     '<div style="flex:1;min-width:0;">' +
@@ -1007,7 +1048,7 @@ function buildCovRow(type, idx, item) {
     '<div class="cov-actions">' +
       '<div class="cov-status ' + s + '">' + esc(statusLabel) + '</div>' +
       '<button class="cov-edit-btn" title="Edit found value" onclick="startEdit(\'' + type + '\',' + idx + ')">\u270E</button>' +
-      (isFail && !hasExc ? '<button class="cov-except-btn" title="Grant exception" onclick="grantException(\'' + type + '\',' + idx + ')">\u26A1</button>' : '') +
+      (showExceptBtn ? '<button class="cov-except-btn' + (hasExc ? ' active' : '') + '" title="' + (hasExc ? 'Remove exception' : 'Grant exception') + '" onclick="grantException(\'' + type + '\',' + idx + ')">\u26A1</button>' : '') +
     '</div>' +
   '</div>';
 }
@@ -1028,15 +1069,36 @@ function saveEdit(type, idx) {
   if (!val) return;
   var item = type === "cov" ? lastResult.coverages[idx] : lastResult.endorsements[idx];
   item.found_limit = val;
-  item.detail = (item.detail || "") + " [Manually updated]";
+  // Auto-update status: parse dollar amount from edited value and compare to required
+  var editedAmount = parseInt(val.replace(/[$,\s]/g, ""));
+  var reqAmount = item.required_limit ? parseInt(item.required_limit.replace(/[$,\s]/g, "")) : 0;
+  if (editedAmount && reqAmount && editedAmount >= reqAmount) {
+    item.status = "PASS";
+    item.exception = false; // Clear any exception since it now passes
+    item.detail = "Meets required limit [Manually updated]";
+  } else if (editedAmount && reqAmount && editedAmount < reqAmount) {
+    item.status = "FAIL";
+    item.detail = "Found $" + editedAmount.toLocaleString() + " but $" + reqAmount.toLocaleString() + " required [Manually updated]";
+  } else {
+    item.detail = (item.detail || "").replace(" [Manually updated]", "") + " [Manually updated]";
+  }
+  recalcVerdict();
   renderReportBody(lastResult);
+  updateVerdictBadge(lastResult);
   updateLastSavedRecord();
 }
 
 function grantException(type, idx) {
   var item = type === "cov" ? lastResult.coverages[idx] : lastResult.endorsements[idx];
-  item.exception = true;
-  item.detail = (item.detail || "") + " [Exception granted]";
+  if (item.exception) {
+    // Remove exception
+    item.exception = false;
+    item.detail = (item.detail || "").replace(" [Exception granted]", "");
+  } else {
+    // Grant exception
+    item.exception = true;
+    item.detail = (item.detail || "") + " [Exception granted]";
+  }
   recalcVerdict();
   renderReportBody(lastResult);
   updateVerdictBadge(lastResult);
