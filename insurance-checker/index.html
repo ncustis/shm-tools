@@ -193,6 +193,7 @@
     .config-banner,.nav-bar,.footer,.processing,.error-msg,
     #save-prompt,#save-confirm,
     #dashboard-view,
+    #checkin-view,
     .cov-edit-btn,.cov-except-btn,
     #check-view > .card:first-child{display:none !important;}
     /* Force check view and report visible */
@@ -231,9 +232,13 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
       Dashboard
     </div>
+    <div class="nav-tab" onclick="switchView('checkin')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Vendor Check In/Out
+    </div>
     <div class="nav-tab" onclick="switchView('check')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      New Check
+      New Insurance Check
     </div>
   </div>
 </div>
@@ -330,7 +335,77 @@
     <div id="save-confirm" style="display:none;text-align:center;padding:0.75rem;font-size:0.85rem;font-weight:600;color:var(--pass);background:var(--pass-bg);border-radius:8px;margin-bottom:1rem;"></div>
 
   </div>
+  <!-- ════ CHECKIN VIEW ════ -->
+  <div class="view" id="checkin-view">
+    <div class="card">
+      <div class="card-title">Vendor Check In / Check Out</div>
+      <div class="card-subtitle">Log vendor arrivals and departures from the property.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Property <span style="color:var(--fail);">*</span></label>
+          <div class="sdrop"><input type="text" class="sdrop-input" id="checkin-property" placeholder="Start typing to search marinas…" autocomplete="off" /><div class="sdrop-list" id="checkin-prop-sdrop-list"></div></div>
+        </div>
+        <div>
+          <label class="form-label">Vendor Name <span style="color:var(--fail);">*</span></label>
+          <div class="sdrop"><input type="text" class="sdrop-input" id="checkin-vendor" placeholder="Start typing vendor name…" autocomplete="off" /><div class="sdrop-list" id="checkin-vendor-sdrop-list"></div></div>
+        </div>
+      </div>
+      <div id="checkin-vendor-status" style="display:none;margin-bottom:1rem;padding:0.85rem 1rem;border-radius:8px;border:1.5px solid var(--warm-gray-dark);background:var(--warm-gray);">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+          <div><span class="form-label" style="margin-bottom:0;">Compliance Status</span><div id="checkin-compliance-val" style="font-weight:600;font-size:0.88rem;margin-top:2px;"></div></div>
+          <div><span class="form-label" style="margin-bottom:0;">Insurance Expiration</span><div id="checkin-expiration-val" style="font-weight:600;font-size:0.88rem;margin-top:2px;"></div></div>
+          <div><span class="form-label" style="margin-bottom:0;">Access Agreement</span><div id="checkin-agreement-val" style="font-weight:600;font-size:0.88rem;margin-top:2px;"></div></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="form-label">Reason for Visit <span style="color:var(--fail);">*</span></label>
+          <select class="form-select" id="checkin-reason" style="margin-bottom:0;" onchange="onReasonChange();checkCheckinReady();">
+            <option value="">Select…</option>
+            <option value="Marine Work (Retained by Member)">Marine Work (Retained by Member)</option>
+            <option value="Marine Work (Retained by Safe Harbor)">Marine Work (Retained by Safe Harbor)</option>
+            <option value="Facility Work">Facility Work</option>
+          </select>
+        </div>
+        <div id="fees-field" style="display:none;">
+          <label class="form-label">Access Fees Paid <span style="color:var(--fail);">*</span></label>
+          <select class="form-select" id="checkin-fees" style="margin-bottom:0;" onchange="checkCheckinReady();">
+            <option value="">Select…</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0.75rem;">
+        <div>
+          <label class="form-label">Check-In Date & Time <span style="color:var(--fail);">*</span></label>
+          <input type="datetime-local" class="form-input" id="checkin-datetime" style="margin-bottom:0;" />
+        </div>
+        <div>
+          <label class="form-label">Check-Out Date & Time</label>
+          <input type="datetime-local" class="form-input" id="checkout-datetime" style="margin-bottom:0;" />
+        </div>
+      </div>
+      <div style="margin-top:1.25rem;display:flex;gap:8px;">
+        <button class="btn btn-primary" id="btn-checkin" onclick="submitCheckin()" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Check In
+        </button>
+        <button class="btn btn-outline" onclick="resetCheckinForm()">Reset</button>
+      </div>
+      <div id="checkin-confirm" style="display:none;margin-top:1rem;padding:0.75rem;font-size:0.85rem;font-weight:600;border-radius:8px;text-align:center;"></div>
+    </div>
+
+    <div class="card" style="margin-top:1rem;">
+      <div class="card-title" style="margin-bottom:0.75rem;">Currently On Property</div>
+      <div id="checkin-onsite-area"></div>
+    </div>
+  </div>
+
+  <!-- ════ DASHBOARD VIEW ════ -->
   <div class="view active" id="dashboard-view">
+    <div id="dash-onsite-banner" style="display:none;margin-bottom:1rem;"></div>
     <div class="dash-stats" id="dash-stats"></div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
@@ -376,12 +451,14 @@ function getRequirementsText(type) {
 
 // ═══ NAV ═══
 function switchView(v) {
-  document.querySelectorAll(".nav-tab").forEach(function(t, i) { t.classList.toggle("active", (v === "dashboard" ? 0 : 1) === i); });
+  var tabMap = {"dashboard":0, "checkin":1, "check":2};
+  document.querySelectorAll(".nav-tab").forEach(function(t, i) { t.classList.toggle("active", tabMap[v] === i); });
   document.querySelectorAll(".view").forEach(function(el) { el.classList.remove("active"); });
   document.getElementById(v + "-view").classList.add("active");
   var main = document.querySelector(".main");
   if (v === "dashboard") { main.classList.add("full-width"); main.classList.remove("narrow"); renderDashboard(); }
   else { main.classList.remove("full-width"); main.classList.add("narrow"); }
+  if (v === "checkin") renderCheckinOnsite();
 }
 
 // ═══ FORM ═══
@@ -1443,8 +1520,207 @@ renderDashboard = function() {
 };
 
 
+// ═══ VENDOR CHECK IN/OUT ═══
+var CHECKIN_KEY = "shm-checkin-records";
+
+function getCheckins() { try { return JSON.parse(localStorage.getItem(CHECKIN_KEY) || "[]"); } catch(e) { return []; } }
+function saveCheckins(recs) { localStorage.setItem(CHECKIN_KEY, JSON.stringify(recs)); }
+
+// Lookup vendor status from insurance dashboard records
+function lookupVendor(property, vendor) {
+  var recs = getRecords();
+  var match = null;
+  recs.forEach(function(r) {
+    if (r.property === property && r.contractor && r.contractor.toLowerCase() === vendor.toLowerCase()) {
+      if (!match || new Date(r.date) > new Date(match.date)) match = r;
+    }
+  });
+  return match;
+}
+
+function updateCheckinVendorStatus() {
+  var prop = document.getElementById("checkin-property").value.trim();
+  var vendor = document.getElementById("checkin-vendor").value.trim();
+  var panel = document.getElementById("checkin-vendor-status");
+  if (!prop || !vendor) { panel.style.display = "none"; checkCheckinReady(); return; }
+
+  var rec = lookupVendor(prop, vendor);
+  if (rec) {
+    panel.style.display = "block";
+    panel.style.borderColor = "var(--warm-gray-dark)";
+    panel.style.background = "var(--warm-gray)";
+    var compEl = document.getElementById("checkin-compliance-val");
+    var v = rec.verdict || "NON-COMPLIANT";
+    if (v !== "COMPLIANT" && v !== "COMPLIANT WITH EXCEPTION" && v !== "NON-COMPLIANT") v = "NON-COMPLIANT";
+    var color = v === "COMPLIANT" ? "var(--pass)" : v === "COMPLIANT WITH EXCEPTION" ? "#1A75CF" : "var(--fail)";
+    compEl.innerHTML = "<span style=\"color:" + color + "\">" + v + "</span>";
+    document.getElementById("checkin-expiration-val").textContent = rec.expiration || "Not specified";
+    var agr = rec.access_agreement;
+    document.getElementById("checkin-agreement-val").innerHTML = agr ? "<span style=\"color:var(--pass)\">\u2713 On File</span>" : "<span style=\"color:var(--fail)\">\u2717 Not on File</span>";
+  } else {
+    panel.style.display = "block";
+    panel.style.borderColor = "var(--warn)";
+    panel.style.background = "var(--warn-bg)";
+    document.getElementById("checkin-compliance-val").innerHTML = "<span style=\"color:var(--warn);\">\u26A0 New Insurance Check Required</span>";
+    document.getElementById("checkin-expiration-val").textContent = "\u2014";
+    document.getElementById("checkin-agreement-val").innerHTML = "<span style=\"color:var(--text-muted)\">\u2014</span>";
+  }
+  // Auto-populate check-in time if empty
+  var dtField = document.getElementById("checkin-datetime");
+  if (!dtField.value) {
+    var now = new Date();
+    var local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    dtField.value = local;
+  }
+  checkCheckinReady();
+}
+
+function onReasonChange() {
+  var reason = document.getElementById("checkin-reason").value;
+  var feesField = document.getElementById("fees-field");
+  if (reason === "Marine Work (Retained by Member)") {
+    feesField.style.display = "block";
+  } else {
+    feesField.style.display = "none";
+    document.getElementById("checkin-fees").value = "";
+  }
+}
+
+function checkCheckinReady() {
+  var prop = document.getElementById("checkin-property").value.trim();
+  var vendor = document.getElementById("checkin-vendor").value.trim();
+  var dt = document.getElementById("checkin-datetime").value;
+  var reason = document.getElementById("checkin-reason").value;
+  var needsFees = reason === "Marine Work (Retained by Member)";
+  var fees = document.getElementById("checkin-fees").value;
+  var feesOk = needsFees ? !!fees : true;
+  document.getElementById("btn-checkin").disabled = !(prop && MARINA_NAMES.indexOf(prop) !== -1 && vendor && dt && reason && feesOk);
+}
+
+function submitCheckin() {
+  var prop = document.getElementById("checkin-property").value.trim();
+  var vendor = document.getElementById("checkin-vendor").value.trim();
+  var checkinDt = document.getElementById("checkin-datetime").value;
+  var checkoutDt = document.getElementById("checkout-datetime").value;
+  var reason = document.getElementById("checkin-reason").value;
+  var fees = document.getElementById("checkin-fees").value;
+
+  var rec = lookupVendor(prop, vendor);
+  var unvalidated = !rec;
+  var recs = getCheckins();
+  recs.push({
+    id: Date.now() + "-" + Math.random().toString(36).substr(2, 6),
+    property: prop,
+    vendor: vendor,
+    checkin: checkinDt,
+    checkout: checkoutDt || null,
+    reason: reason,
+    fees: (reason === "Marine Work (Retained by Member)") ? fees : "N/A",
+    compliance: rec ? rec.verdict : "UNVALIDATED",
+    expiration: rec ? (rec.expiration || null) : null,
+    access_agreement: rec ? rec.access_agreement : false,
+    unvalidated: unvalidated
+  });
+  saveCheckins(recs);
+
+  var el = document.getElementById("checkin-confirm");
+  if (checkoutDt) {
+    el.textContent = "\u2713 " + vendor + " checked out from " + prop;
+    el.style.background = "var(--pass-bg)";
+    el.style.color = "var(--pass)";
+  } else {
+    el.textContent = "\u2713 " + vendor + " checked in at " + prop;
+    el.style.background = "var(--pass-bg)";
+    el.style.color = "var(--pass)";
+  }
+  el.style.display = "block";
+  setTimeout(function() { el.style.display = "none"; }, 4000);
+
+  renderCheckinOnsite();
+  resetCheckinForm();
+}
+
+function resetCheckinForm() {
+  document.getElementById("checkin-property").value = "";
+  document.getElementById("checkin-vendor").value = "";
+  document.getElementById("checkin-datetime").value = "";
+  document.getElementById("checkout-datetime").value = "";
+  document.getElementById("checkin-reason").value = "";
+  document.getElementById("checkin-fees").value = "";
+  document.getElementById("fees-field").style.display = "none";
+  document.getElementById("checkin-vendor-status").style.display = "none";
+  document.getElementById("btn-checkin").disabled = true;
+}
+
+function checkoutVendor(id) {
+  var recs = getCheckins();
+  var rec = recs.find(function(r) { return r.id === id; });
+  if (rec) {
+    rec.checkout = new Date().toISOString().slice(0, 16);
+    saveCheckins(recs);
+    renderCheckinOnsite();
+    renderDashboardOnsite();
+  }
+}
+
+function renderCheckinOnsite() {
+  var recs = getCheckins();
+  var onsite = recs.filter(function(r) { return r.checkin && !r.checkout; });
+  var area = document.getElementById("checkin-onsite-area");
+  if (!onsite.length) {
+    area.innerHTML = "<div style=\"text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;\">No vendors currently checked in.</div>";
+    return;
+  }
+  onsite.sort(function(a, b) { return new Date(b.checkin) - new Date(a.checkin); });
+  var rows = onsite.map(function(r) {
+    var dt = new Date(r.checkin).toLocaleString("en-US", {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    var vc = r.compliance === "COMPLIANT" ? "pass" : r.compliance === "COMPLIANT WITH EXCEPTION" ? "exception" : "fail";
+    var feeDisplay = r.reason === "Marine Work (Retained by Member)" ? esc(r.fees) : "\u2014";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + (r.unvalidated ? " <span style=\"color:var(--warn);font-size:0.7rem;\">(unvalidated)</span>" : "") + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + dt + "</td><td>" + feeDisplay + "</td><td><button class=\"btn btn-sm btn-primary\" style=\"padding:0.3rem 0.8rem;font-size:0.72rem;\" onclick=\"checkoutVendor('" + r.id + "')\">Check Out</button></td></tr>";
+  }).join("");
+  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status</th><th>Reason</th><th>Checked In</th><th>Fees</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+}
+
+function renderDashboardOnsite() {
+  var recs = getCheckins();
+  var onsite = recs.filter(function(r) { return r.checkin && !r.checkout; });
+  var banner = document.getElementById("dash-onsite-banner");
+  if (!onsite.length) { banner.style.display = "none"; return; }
+  banner.style.display = "block";
+  var rows = onsite.map(function(r) {
+    var dt = new Date(r.checkin).toLocaleString("en-US", {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    var vc = r.compliance === "COMPLIANT" ? "pass" : r.compliance === "COMPLIANT WITH EXCEPTION" ? "exception" : "fail";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + (r.unvalidated ? " <span style=\"color:var(--warn);font-size:0.7rem;\">(unvalidated)</span>" : "") + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + dt + "</td><td><button class=\"btn btn-sm btn-primary\" style=\"padding:0.3rem 0.8rem;font-size:0.72rem;\" onclick=\"checkoutVendor('" + r.id + "');renderDashboard();\">Check Out</button></td></tr>";
+  }).join("");
+  banner.innerHTML = "<div class=\"card\" style=\"border-left:4px solid var(--gold);\"><div class=\"card-title\" style=\"margin-bottom:0.6rem;\">\u26A0 Vendors Currently On Property <span style=\"font-size:0.82rem;font-weight:400;color:var(--text-muted);\">" + onsite.length + " checked in</span></div><div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status</th><th>Reason</th><th>Checked In</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
+}
+
+// Init checkin dropdowns
+var checkinPropSdrop = initSdrop("checkin-property", "checkin-prop-sdrop-list", MARINA_NAMES, {
+  onSelect: function() { updateCheckinVendorStatus(); checkCheckinReady(); }
+});
+
+// Vendor dropdown populated from dashboard records
+function getCheckinVendorList() {
+  var recs = getRecords();
+  var names = {};
+  recs.forEach(function(r) { if (r.contractor) names[r.contractor] = true; });
+  return Object.keys(names).sort();
+}
+var checkinVendorSdrop = initSdrop("checkin-vendor", "checkin-vendor-sdrop-list", getCheckinVendorList(), {
+  onSelect: function() { updateCheckinVendorStatus(); checkCheckinReady(); }
+});
+
+// Also allow typing new vendor names
+document.getElementById("checkin-vendor").addEventListener("input", function() { updateCheckinVendorStatus(); checkCheckinReady(); });
+document.getElementById("checkin-property").addEventListener("input", function() { updateCheckinVendorStatus(); checkCheckinReady(); });
+document.getElementById("checkin-datetime").addEventListener("input", checkCheckinReady);
+document.getElementById("checkout-datetime").addEventListener("input", checkCheckinReady);
+
+
 updateAlertBadge();
 renderDashboard();
+renderDashboardOnsite();
 </script>
 
 
