@@ -28,14 +28,16 @@
 
   /* Nav */
   .nav-bar{background:var(--white);border-bottom:1px solid var(--warm-gray-dark);position:sticky;top:0;z-index:50;}
-  .nav-inner{max-width:1100px;margin:0 auto;padding:0 2rem;display:flex;gap:0;}
+  .nav-inner{max-width:100%;margin:0 auto;padding:0 2.5rem;display:flex;gap:0;}
   .nav-tab{padding:0.85rem 1.5rem;font-size:0.85rem;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:3px solid transparent;transition:all 0.2s;display:flex;align-items:center;gap:7px;user-select:none;}
   .nav-tab:hover{color:var(--dark-blue);}
   .nav-tab.active{color:var(--dark-blue);border-bottom-color:var(--gold);}
   .nav-tab .badge{background:var(--fail);color:white;font-size:0.65rem;padding:1px 7px;border-radius:100px;font-weight:700;}
 
   /* Layout */
-  .main{max-width:1100px;margin:0 auto;padding:1.5rem 2rem 2.5rem;}
+  .main{margin:0 auto;padding:1.5rem 2rem 2.5rem;transition:max-width 0.2s;}
+  .main.full-width{max-width:100%;padding:1.5rem 2.5rem 2.5rem;}
+  .main.narrow{max-width:1100px;}
   .view{display:none;} .view.active{display:block;}
   .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:2rem;margin-bottom:1.25rem;}
   .card-title{font-size:1.05rem;font-weight:600;margin-bottom:0.25rem;}
@@ -197,19 +199,18 @@
 
 <div class="nav-bar">
   <div class="nav-inner">
+    <div class="nav-tab active" onclick="switchView('dashboard')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Vendor Status Dashboard
+    </div>
     <div class="nav-tab" onclick="switchView('check')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       New Check
     </div>
-    <div class="nav-tab active" onclick="switchView('dashboard')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      Vendor Status Dashboard
-      <span class="badge" id="dash-alert-badge" style="display:none;"></span>
-    </div>
   </div>
 </div>
 
-<div class="main">
+<div class="main full-width">
   <!-- ════ CHECK VIEW ════ -->
   <div class="view" id="check-view">
     <div class="card">
@@ -458,7 +459,6 @@
             <option value="COMPLIANT">Compliant</option>
             <option value="COMPLIANT WITH EXCEPTION">Compliant w/ Exception</option>
             <option value="NON-COMPLIANT">Non-Compliant</option>
-            <option value="NEEDS REVIEW">Needs Review</option>
           </select>
           <button class="btn btn-outline btn-sm" onclick="exportDashboardCSV()">Export All</button>
           <button class="btn btn-outline btn-sm" style="color:var(--fail);" onclick="if(confirm('Clear all records?')){clearAllRecords();}">Clear All</button>
@@ -492,10 +492,12 @@ function getRequirementsText(type) {
 
 // ═══ NAV ═══
 function switchView(v) {
-  document.querySelectorAll(".nav-tab").forEach(function(t, i) { t.classList.toggle("active", (v === "check" ? 0 : 1) === i); });
+  document.querySelectorAll(".nav-tab").forEach(function(t, i) { t.classList.toggle("active", (v === "dashboard" ? 0 : 1) === i); });
   document.querySelectorAll(".view").forEach(function(el) { el.classList.remove("active"); });
   document.getElementById(v + "-view").classList.add("active");
-  if (v === "dashboard") renderDashboard();
+  var main = document.querySelector(".main");
+  if (v === "dashboard") { main.classList.add("full-width"); main.classList.remove("narrow"); renderDashboard(); }
+  else { main.classList.remove("full-width"); main.classList.add("narrow"); }
 }
 
 // ═══ FORM ═══
@@ -800,7 +802,7 @@ function parseCertificateText(text, type) {
     contractor_name: "",
     certificate_date: "",
     policy_expiration: "",
-    overall_verdict: "NEEDS REVIEW",
+    overall_verdict: "NON-COMPLIANT",
     coverages: [],
     endorsements: [],
     notes: ["Analysis performed using client-side text parsing (Demo Mode). For production accuracy, enable AI-powered analysis by setting ANALYSIS_MODE to 'live'."]
@@ -923,12 +925,10 @@ function parseCertificateText(text, type) {
     result.endorsements.push({ endorsement_name: er.name, status: found ? "PASS" : "NEEDS REVIEW", detail: found ? "Endorsement language found on certificate" : "Could not confirm — verify attached endorsement documents" });
   });
 
-  // Verdict
+  // Verdict — only COMPLIANT, NON-COMPLIANT, or COMPLIANT WITH EXCEPTION
   var all = result.coverages.concat(result.endorsements);
-  var hasFail = all.some(function(i) { return i.status === "FAIL" || i.status === "NOT FOUND"; });
-  var hasReview = all.some(function(i) { return i.status === "NEEDS REVIEW"; });
-  if (hasFail) result.overall_verdict = "NON-COMPLIANT";
-  else if (hasReview) result.overall_verdict = "NEEDS REVIEW";
+  var hasIssue = all.some(function(i) { return i.status === "FAIL" || i.status === "NOT FOUND" || i.status === "NEEDS REVIEW"; });
+  if (hasIssue) result.overall_verdict = "NON-COMPLIANT";
   else result.overall_verdict = "COMPLIANT";
 
   return result;
@@ -1072,7 +1072,7 @@ function renderReport(result, reqs, propertyName) {
     '<div class="meta-item"><div class="meta-label">Property</div><div class="meta-value">' + esc(propertyName) + '</div></div>' +
     '<div class="meta-item"><div class="meta-label">Contractor</div><div class="meta-value">' + esc(result.contractor_name || "Unknown") + '</div></div>' +
     '<div class="meta-item"><div class="meta-label">Type</div><div class="meta-value">' + esc(reqs.label) + '</div></div>' +
-    '<div class="meta-item"><div class="meta-label">Access Agreement</div><div class="meta-value" style="color:' + (result.access_agreement ? 'var(--pass)' : 'var(--fail)') + ';">' + (result.access_agreement ? '\u2713 On File' : '\u2717 Not on File') + '</div></div>' +
+    '<div class="meta-item"><div class="meta-label">Access Agreement</div><div class="meta-value" style="color:' + (result.access_agreement ? 'var(--pass)' : 'var(--fail)') + ';"><span id="access-display">' + (result.access_agreement ? '\u2713 On File' : '\u2717 Not on File') + '</span> <button class="cov-edit-btn" title="Toggle access agreement" onclick="toggleAccessAgreement()" style="display:inline-flex;vertical-align:middle;margin-left:4px;">\u270E</button></div></div>' +
     '<div class="meta-item"><div class="meta-label">Policy Expiration</div><div class="meta-value"><span id="policy-exp-display">' + esc(result.policy_expiration || "Not specified") + '</span> <button class="cov-edit-btn" title="Edit expiration" onclick="editExpiration()" style="display:inline-flex;vertical-align:middle;margin-left:4px;">\u270E</button><div id="exp-edit-area"></div></div></div>';
   renderReportBody(result);
   var nd = document.getElementById("report-notes"), nl = document.getElementById("notes-list");
@@ -1136,6 +1136,34 @@ function startEdit(type, idx) {
   document.getElementById("edit-val-" + type + "-" + idx).focus();
 }
 function cancelEdit(type, idx) { document.getElementById("edit-area-" + type + "-" + idx).innerHTML = ""; }
+
+function toggleAccessAgreement() {
+  if (!lastResult) return;
+  lastResult.access_agreement = !lastResult.access_agreement;
+  // Update display
+  var el = document.getElementById("access-display");
+  if (lastResult.access_agreement) {
+    el.textContent = "\u2713 On File";
+    el.parentElement.style.color = "var(--pass)";
+    // Remove the no-agreement note if it exists
+    lastResult.notes = (lastResult.notes || []).filter(function(n) { return n.indexOf("signed Contractor Access Agreement") === -1; });
+  } else {
+    el.textContent = "\u2717 Not on File";
+    el.parentElement.style.color = "var(--fail)";
+    lastResult.notes = lastResult.notes || [];
+    if (!lastResult.notes.some(function(n) { return n.indexOf("signed Contractor Access Agreement") !== -1; })) {
+      lastResult.notes.unshift("Vendor does not have a signed Contractor Access Agreement on file. Both a signed agreement and valid insurance are required for property access.");
+    }
+  }
+  // Recalculate verdict and update everything
+  recalcVerdict();
+  updateVerdictBadge(lastResult);
+  // Re-render notes
+  var nd = document.getElementById("report-notes"), nl = document.getElementById("notes-list");
+  if (lastResult.notes && lastResult.notes.length) { nd.style.display = "block"; nl.innerHTML = lastResult.notes.map(function(n) { return "<li>" + esc(n) + "</li>"; }).join(""); }
+  else nd.style.display = "none";
+  updateLastSavedRecord();
+}
 
 function editExpiration() {
   var current = lastResult.policy_expiration || "";
@@ -1210,22 +1238,19 @@ function recalcVerdict() {
   // No signed agreement = always non-compliant
   if (lastResult.access_agreement === false) { lastResult.overall_verdict = "NON-COMPLIANT"; return; }
   var all = (lastResult.coverages || []).concat(lastResult.endorsements || []);
-  var hasRealFail = all.some(function(i) { return !i.exception && ["FAIL", "NOT FOUND"].indexOf((i.status || "").toUpperCase()) !== -1; });
+  var hasRealIssue = all.some(function(i) { return !i.exception && ["FAIL", "NOT FOUND", "NEEDS REVIEW"].indexOf((i.status || "").toUpperCase()) !== -1; });
   var hasExc = all.some(function(i) { return i.exception; });
-  var hasReview = all.some(function(i) { return !i.exception && (i.status || "").toUpperCase() === "NEEDS REVIEW"; });
-  if (hasRealFail) lastResult.overall_verdict = "NON-COMPLIANT";
+  if (hasRealIssue) lastResult.overall_verdict = "NON-COMPLIANT";
   else if (hasExc) lastResult.overall_verdict = "COMPLIANT WITH EXCEPTION";
-  else if (hasReview) lastResult.overall_verdict = "NEEDS REVIEW";
   else lastResult.overall_verdict = "COMPLIANT";
 }
 
 function updateVerdictBadge(result) {
   var badge = document.getElementById("verdict-badge");
-  var v = result.overall_verdict || "NEEDS REVIEW";
-  var cls = "warn", icon = "\u26A0";
+  var v = result.overall_verdict || "NON-COMPLIANT";
+  var cls = "fail", icon = "\u2717";
   if (v === "COMPLIANT") { cls = "pass"; icon = "\u2713"; }
   else if (v === "COMPLIANT WITH EXCEPTION") { cls = "exception"; icon = "\u26A1"; }
-  else if (v === "NON-COMPLIANT") { cls = "fail"; icon = "\u2717"; }
   badge.className = "verdict-badge " + cls;
   badge.innerHTML = icon + " " + v;
 }
@@ -1239,6 +1264,8 @@ function updateLastSavedRecord() {
     last.coverages = lastResult.coverages;
     last.endorsements = lastResult.endorsements;
     last.expiration = lastResult.policy_expiration || last.expiration;
+    last.access_agreement = lastResult.access_agreement;
+    last.notes = lastResult.notes;
     saveRecords(recs);
     updateAlertBadge();
   }
@@ -1253,19 +1280,13 @@ function getRecords() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY
 function saveRecords(recs) { localStorage.setItem(STORAGE_KEY, JSON.stringify(recs)); }
 function saveRecord(property, type, result) {
   var recs = getRecords();
-  recs.push({ id: Date.now() + "-" + Math.random().toString(36).substr(2, 6), property: property, type: type, contractor: result.contractor_name || "Unknown", verdict: result.overall_verdict || "NEEDS REVIEW", date: new Date().toISOString(), expiration: result.policy_expiration || null, access_agreement: result.access_agreement || false, coverages: result.coverages || [], endorsements: result.endorsements || [], notes: result.notes || [] });
+  recs.push({ id: Date.now() + "-" + Math.random().toString(36).substr(2, 6), property: property, type: type, contractor: result.contractor_name || "Unknown", verdict: result.overall_verdict || "NON-COMPLIANT", date: new Date().toISOString(), expiration: result.policy_expiration || null, access_agreement: result.access_agreement || false, coverages: result.coverages || [], endorsements: result.endorsements || [], notes: result.notes || [] });
   saveRecords(recs);
 }
 function clearAllRecords() { saveRecords([]); renderDashboard(); updateAlertBadge(); }
 
 function updateAlertBadge() {
-  var recs = getRecords();
-  var ids = {};
-  recs.forEach(function(r) { if (r.verdict === "NON-COMPLIANT") ids[r.id] = true; });
-  recs.forEach(function(r) { if (r.expiration && new Date(r.expiration) < new Date()) ids[r.id] = true; });
-  var n = Object.keys(ids).length;
-  var badge = document.getElementById("dash-alert-badge");
-  if (n > 0) { badge.style.display = "inline"; badge.textContent = n; } else badge.style.display = "none";
+  // Badge removed from UI — function kept for compatibility
 }
 
 // ═══ DASHBOARD ═══
@@ -1273,20 +1294,26 @@ function renderDashboard() {
   var recs = getRecords();
   var fp = document.getElementById("dash-filter-property").value;
   var fs = document.getElementById("dash-filter-status").value;
-  var filtered = recs;
-  if (fp) filtered = filtered.filter(function(r) { return r.property === fp; });
+
+  // Property-scoped records for stats
+  var propRecs = recs;
+  if (fp) propRecs = recs.filter(function(r) { return r.property === fp; });
+
+  // Further filter by status for the table only
+  var filtered = propRecs;
   if (fs) filtered = filtered.filter(function(r) { return r.verdict === fs; });
 
-  var total = recs.length;
-  var compliant = recs.filter(function(r) { return r.verdict === "COMPLIANT" || r.verdict === "COMPLIANT WITH EXCEPTION"; }).length;
+  // Stats scoped to selected property
+  var total = propRecs.length;
+  var compliant = propRecs.filter(function(r) { return r.verdict === "COMPLIANT" || r.verdict === "COMPLIANT WITH EXCEPTION"; }).length;
   var ids = {};
-  recs.forEach(function(r) { if (r.verdict === "NON-COMPLIANT") ids[r.id] = true; });
-  recs.forEach(function(r) { if (r.expiration && new Date(r.expiration) < new Date()) ids[r.id] = true; });
+  propRecs.forEach(function(r) { if (r.verdict === "NON-COMPLIANT") ids[r.id] = true; });
+  propRecs.forEach(function(r) { if (r.expiration && new Date(r.expiration) < new Date()) ids[r.id] = true; });
   var noncompExp = Object.keys(ids).length;
-  var expSoon = recs.filter(function(r) { if (!r.expiration) return false; var d = (new Date(r.expiration) - new Date()) / 86400000; return d >= 0 && d <= 30; }).length;
+  var expSoon = propRecs.filter(function(r) { if (!r.expiration) return false; var d = (new Date(r.expiration) - new Date()) / 86400000; return d >= 0 && d <= 30; }).length;
 
   document.getElementById("dash-stats").innerHTML =
-    '<div class="stat-card"><div class="stat-num navy">' + total + '</div><div class="stat-label">Total Checks</div></div>' +
+    '<div class="stat-card"><div class="stat-num navy">' + total + '</div><div class="stat-label">Total Vendors</div></div>' +
     '<div class="stat-card"><div class="stat-num green">' + compliant + '</div><div class="stat-label">Compliant</div></div>' +
     '<div class="stat-card"><div class="stat-num red">' + noncompExp + '</div><div class="stat-label">Non-Compliant or Expired</div></div>' +
     '<div class="stat-card"><div class="stat-num amber">' + expSoon + '</div><div class="stat-label">Expiring \u226430 Days</div></div>';
@@ -1382,7 +1409,7 @@ saveRecord = function(property, type, result) {
     var recs = getRecords();
     var idx = recs.findIndex(function(r) { return r.id === renewingRecordId; });
     if (idx !== -1) {
-      recs[idx].verdict = result.overall_verdict || "NEEDS REVIEW";
+      recs[idx].verdict = result.overall_verdict || "NON-COMPLIANT";
       recs[idx].date = new Date().toISOString();
       recs[idx].expiration = result.policy_expiration || null;
       recs[idx].access_agreement = result.access_agreement || false;
