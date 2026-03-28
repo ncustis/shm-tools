@@ -1000,8 +1000,7 @@ function renderReport(result, reqs, propertyName) {
     '<div class="meta-item"><div class="meta-label">Property</div><div class="meta-value">' + esc(propertyName) + '</div></div>' +
     '<div class="meta-item"><div class="meta-label">Contractor</div><div class="meta-value">' + esc(result.contractor_name || "Unknown") + '</div></div>' +
     '<div class="meta-item"><div class="meta-label">Type</div><div class="meta-value">' + esc(reqs.label) + '</div></div>' +
-    '<div class="meta-item"><div class="meta-label">Certificate Date</div><div class="meta-value">' + esc(result.certificate_date || "Not specified") + '</div></div>' +
-    '<div class="meta-item"><div class="meta-label">Policy Expiration</div><div class="meta-value">' + esc(result.policy_expiration || "Not specified") + '</div></div>';
+    '<div class="meta-item"><div class="meta-label">Policy Expiration</div><div class="meta-value"><span id="policy-exp-display">' + esc(result.policy_expiration || "Not specified") + '</span> <button class="cov-edit-btn" title="Edit expiration" onclick="editExpiration()" style="display:inline-flex;vertical-align:middle;margin-left:4px;">\u270E</button><div id="exp-edit-area"></div></div></div>';
   renderReportBody(result);
   var nd = document.getElementById("report-notes"), nl = document.getElementById("notes-list");
   if (result.notes && result.notes.length) { nd.style.display = "block"; nl.innerHTML = result.notes.map(function(n) { return "<li>" + esc(n) + "</li>"; }).join(""); }
@@ -1064,21 +1063,49 @@ function startEdit(type, idx) {
   document.getElementById("edit-val-" + type + "-" + idx).focus();
 }
 function cancelEdit(type, idx) { document.getElementById("edit-area-" + type + "-" + idx).innerHTML = ""; }
+
+function editExpiration() {
+  var current = lastResult.policy_expiration || "";
+  document.getElementById("exp-edit-area").innerHTML =
+    '<div class="edit-inline" style="margin-top:6px;">' +
+    '<input type="text" id="exp-edit-val" value="' + esc(current) + '" placeholder="MM/DD/YYYY" style="width:120px;"/>' +
+    '<button class="edit-save" onclick="saveExpiration()">Save</button>' +
+    '<button class="edit-cancel" onclick="cancelExpiration()">Cancel</button>' +
+    '</div>';
+  document.getElementById("exp-edit-val").focus();
+}
+function cancelExpiration() { document.getElementById("exp-edit-area").innerHTML = ""; }
+function saveExpiration() {
+  var val = document.getElementById("exp-edit-val").value.trim();
+  if (!val) return;
+  lastResult.policy_expiration = val;
+  document.getElementById("policy-exp-display").textContent = val;
+  cancelExpiration();
+  updateLastSavedRecord();
+}
+
+function formatDollar(val) {
+  var num = parseInt(String(val).replace(/[$,\s]/g, ""));
+  if (isNaN(num)) return val;
+  return "$" + num.toLocaleString();
+}
 function saveEdit(type, idx) {
   var val = document.getElementById("edit-val-" + type + "-" + idx).value.trim();
   if (!val) return;
   var item = type === "cov" ? lastResult.coverages[idx] : lastResult.endorsements[idx];
-  item.found_limit = val;
-  // Auto-update status: parse dollar amount from edited value and compare to required
+  // Format with $ and commas
+  var formatted = formatDollar(val);
+  item.found_limit = formatted;
+  // Auto-update status: parse dollar amount and compare to required
   var editedAmount = parseInt(val.replace(/[$,\s]/g, ""));
   var reqAmount = item.required_limit ? parseInt(item.required_limit.replace(/[$,\s]/g, "")) : 0;
   if (editedAmount && reqAmount && editedAmount >= reqAmount) {
     item.status = "PASS";
-    item.exception = false; // Clear any exception since it now passes
+    item.exception = false;
     item.detail = "Meets required limit [Manually updated]";
   } else if (editedAmount && reqAmount && editedAmount < reqAmount) {
     item.status = "FAIL";
-    item.detail = "Found $" + editedAmount.toLocaleString() + " but $" + reqAmount.toLocaleString() + " required [Manually updated]";
+    item.detail = "Found " + formatted + " but " + formatDollar(reqAmount) + " required [Manually updated]";
   } else {
     item.detail = (item.detail || "").replace(" [Manually updated]", "") + " [Manually updated]";
   }
@@ -1136,6 +1163,7 @@ function updateLastSavedRecord() {
     last.verdict = lastResult.overall_verdict;
     last.coverages = lastResult.coverages;
     last.endorsements = lastResult.endorsements;
+    last.expiration = lastResult.policy_expiration || last.expiration;
     saveRecords(recs);
     updateAlertBadge();
   }
@@ -1199,10 +1227,79 @@ function renderDashboard() {
     var vc = r.verdict === "COMPLIANT" ? "pass" : r.verdict === "NON-COMPLIANT" ? "fail" : r.verdict === "COMPLIANT WITH EXCEPTION" ? "exception" : "warn";
     var es = "\u2014", ec = "";
     if (r.expiration) { es = r.expiration; var diff = (new Date(r.expiration) - new Date()) / 86400000; if (diff < 0) ec = "pill-fail"; else if (diff <= 30) ec = "pill-expiring"; }
-    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td></tr>";
+    return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='white-space:nowrap;'><button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
   }).join("");
-  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Checked</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Checked</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
+
+// ═══ RENEW & DELETE ═══
+function deleteRecord(id) {
+  if (!confirm("Delete this compliance record?")) return;
+  var recs = getRecords().filter(function(r) { return r.id !== id; });
+  saveRecords(recs);
+  updateAlertBadge();
+  renderDashboard();
+}
+
+var renewingRecordId = null;
+
+function renewRecord(id) {
+  var recs = getRecords();
+  var rec = recs.find(function(r) { return r.id === id; });
+  if (!rec) return;
+
+  // Store the record ID we're renewing
+  renewingRecordId = id;
+
+  // Switch to new check view
+  switchView("check");
+
+  // Pre-fill the form with the existing record's info
+  document.getElementById("property-name").value = rec.property;
+  document.getElementById("contractor-name-input").value = rec.contractor;
+
+  // Select the contractor type
+  document.querySelectorAll(".type-option").forEach(function(o) {
+    o.classList.remove("selected");
+    if (o.dataset.type === rec.type) { o.classList.add("selected"); selectedType = rec.type; }
+  });
+
+  // Reset file and enable check
+  uploadedFile = null;
+  dropzone.classList.remove("has-file");
+  document.getElementById("dropzone-title").textContent = "Upload renewed certificate for " + rec.contractor;
+  document.getElementById("dropzone-sub").textContent = "This will update the existing record in the repository";
+  document.getElementById("file-name").style.display = "none";
+  fileInput.value = "";
+  document.getElementById("btn-analyze").disabled = true;
+  document.getElementById("report-section").style.display = "none";
+
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Override saveRecord to handle renewals
+var _originalSaveRecord = saveRecord;
+saveRecord = function(property, type, result) {
+  if (renewingRecordId) {
+    // Update existing record instead of creating new
+    var recs = getRecords();
+    var idx = recs.findIndex(function(r) { return r.id === renewingRecordId; });
+    if (idx !== -1) {
+      recs[idx].verdict = result.overall_verdict || "NEEDS REVIEW";
+      recs[idx].date = new Date().toISOString();
+      recs[idx].expiration = result.policy_expiration || null;
+      recs[idx].coverages = result.coverages || [];
+      recs[idx].endorsements = result.endorsements || [];
+      recs[idx].notes = result.notes || [];
+      recs[idx].contractor = result.contractor_name || recs[idx].contractor;
+      saveRecords(recs);
+    }
+    renewingRecordId = null;
+  } else {
+    _originalSaveRecord(property, type, result);
+  }
+};
 
 // ═══ EXPORT ═══
 function exportReport() {
