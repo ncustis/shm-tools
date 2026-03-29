@@ -426,7 +426,6 @@
 
   <!-- ════ DASHBOARD VIEW ════ -->
   <div class="view active" id="dashboard-view">
-    <div id="dash-onsite-banner" style="display:none;margin-bottom:1rem;"></div>
     <div class="dash-stats" id="dash-stats"></div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem;">
@@ -849,7 +848,7 @@ function parseCertificateText(text, type) {
     dates.forEach(function(ds) {
       try { var d = new Date(ds); if (d > new Date() && (!latest || d > latest)) latest = d; } catch(e) {}
     });
-    if (latest) result.policy_expiration = (latest.getMonth()+1) + "/" + latest.getDate() + "/" + latest.getFullYear();
+    if (latest) result.policy_expiration = String(latest.getMonth()+1).padStart(2,"0") + "/" + String(latest.getDate()).padStart(2,"0") + "/" + latest.getFullYear();
   }
 
   // Build requirements map based on type
@@ -1212,16 +1211,36 @@ function editExpiration() {
   var current = lastResult.policy_expiration || "";
   document.getElementById("exp-edit-area").innerHTML =
     '<div class="edit-inline" style="margin-top:6px;">' +
-    '<input type="text" id="exp-edit-val" value="' + esc(current) + '" placeholder="MM/DD/YYYY" style="width:120px;"/>' +
+    '<input type="text" id="exp-edit-val" value="' + esc(current) + '" placeholder="MM/DD/YYYY" maxlength="10" style="width:120px;"/>' +
     '<button class="edit-save" onclick="saveExpiration()">Save</button>' +
     '<button class="edit-cancel" onclick="cancelExpiration()">Cancel</button>' +
     '</div>';
-  document.getElementById("exp-edit-val").focus();
+  var inp = document.getElementById("exp-edit-val");
+  inp.addEventListener("input", function(e) {
+    var v = inp.value.replace(/[^\d]/g, "");
+    if (v.length > 8) v = v.slice(0, 8);
+    var formatted = "";
+    if (v.length > 4) { formatted = v.slice(0,2) + "/" + v.slice(2,4) + "/" + v.slice(4); }
+    else if (v.length > 2) { formatted = v.slice(0,2) + "/" + v.slice(2); }
+    else { formatted = v; }
+    inp.value = formatted;
+  });
+  inp.focus();
+  // If editing, place cursor at end
+  inp.setSelectionRange(inp.value.length, inp.value.length);
 }
 function cancelExpiration() { document.getElementById("exp-edit-area").innerHTML = ""; }
 function saveExpiration() {
   var val = document.getElementById("exp-edit-val").value.trim();
   if (!val) return;
+  // Normalize to MM/DD/YYYY
+  var parts = val.match(/(\d{1,2})\D+(\d{1,2})\D+(\d{2,4})/);
+  if (parts) {
+    var mm = String(parseInt(parts[1])).padStart(2, "0");
+    var dd = String(parseInt(parts[2])).padStart(2, "0");
+    var yyyy = parts[3].length === 2 ? "20" + parts[3] : parts[3];
+    val = mm + "/" + dd + "/" + yyyy;
+  }
   lastResult.policy_expiration = val;
   document.getElementById("policy-exp-display").textContent = val;
   cancelExpiration();
@@ -1798,7 +1817,6 @@ function checkoutVendor(id) {
     rec.checkout = localNow();
     saveCheckins(recs);
     renderCheckinOnsite();
-    renderDashboardOnsite();
   }
 }
 
@@ -1820,20 +1838,6 @@ function renderCheckinOnsite() {
     return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + (r.unvalidated ? " <span style=\"color:var(--warn);font-size:0.7rem;\">(unvalidated)</span>" : "") + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + dt + "</td><td>" + feeDisplay + "</td><td><button class=\"btn btn-sm btn-primary\" style=\"padding:0.3rem 0.8rem;font-size:0.72rem;\" onclick=\"checkoutVendor('" + r.id + "')\">Check Out</button></td></tr>";
   }).join("");
   area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status</th><th>Reason</th><th>Checked In</th><th>Fees</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
-}
-
-function renderDashboardOnsite() {
-  var recs = getCheckins();
-  var onsite = recs.filter(function(r) { return r.checkin && !r.checkout; });
-  var banner = document.getElementById("dash-onsite-banner");
-  if (!onsite.length) { banner.style.display = "none"; return; }
-  banner.style.display = "block";
-  var rows = onsite.map(function(r) {
-    var dt = new Date(r.checkin).toLocaleString("en-US", {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-    var vc = r.compliance === "COMPLIANT" ? "pass" : r.compliance === "COMPLIANT WITH EXCEPTION" ? "exception" : "fail";
-    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + (r.unvalidated ? " <span style=\"color:var(--warn);font-size:0.7rem;\">(unvalidated)</span>" : "") + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + dt + "</td><td><button class=\"btn btn-sm btn-primary\" style=\"padding:0.3rem 0.8rem;font-size:0.72rem;\" onclick=\"checkoutVendor('" + r.id + "');renderDashboard();\">Check Out</button></td></tr>";
-  }).join("");
-  banner.innerHTML = "<div class=\"card\" style=\"border-left:4px solid var(--gold);\"><div class=\"card-title\" style=\"margin-bottom:0.6rem;\">\u26A0 Vendors Currently On Property <span style=\"font-size:0.82rem;font-weight:400;color:var(--text-muted);\">" + onsite.length + " checked in</span></div><div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status</th><th>Reason</th><th>Checked In</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
 }
 
 // Init checkin dropdowns
@@ -1989,9 +1993,168 @@ function clearLogbook() {
 }
 
 
+// ═══ DEMO DATA SEEDING ═══
+// Seeds localStorage with realistic data if empty. Delete this block for production.
+(function seedDemoData() {
+  if (getRecords().length > 0 || getCheckins().length > 0) return; // Don't overwrite existing data
+
+  var now = new Date();
+  function daysAgo(n) { var d = new Date(now); d.setDate(d.getDate() - n); return d.toISOString(); }
+  function daysFromNow(n) { var d = new Date(now); d.setDate(d.getDate() + n); return (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear(); }
+  function localDt(daysBack, hour, min) {
+    var d = new Date(now); d.setDate(d.getDate() - daysBack); d.setHours(hour, min, 0, 0);
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0") + "T" + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function rid() { return Date.now() + "-" + Math.random().toString(36).substr(2,8); }
+
+  // ── Dashboard Records (Insurance) ──
+  var dashRecords = [
+    // Safe Harbor Annapolis — 4 vendors
+    { id: rid(), property: "Safe Harbor Annapolis", type: "type1", contractor: "Chesapeake Marine Services", verdict: "COMPLIANT", date: daysAgo(12), expiration: daysFromNow(180), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Marine General Liability – General Aggregate",status:"PASS",required_limit:"$2,000,000",found_limit:"$2,000,000",detail:"Meets required limit"},
+        {coverage_name:"Bumbershoot / Umbrella",status:"PASS",required_limit:"$2,000,000",found_limit:"$5,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL & SRLL",status:"PASS",detail:"Endorsement confirmed"},
+        {endorsement_name:"Waiver of Subrogation – MGL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Annapolis", type: "type1", contractor: "Bay Area Boat Repair", verdict: "COMPLIANT WITH EXCEPTION", date: daysAgo(8), expiration: daysFromNow(45), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Business Auto Liability – CSL",status:"PASS",required_limit:"$500,000",found_limit:"$500,000",detail:"Meets required limit",exception:true}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL & SRLL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Annapolis", type: "nonmarine", contractor: "Tideline Landscaping", verdict: "COMPLIANT", date: daysAgo(30), expiration: daysFromNow(220), access_agreement: true,
+      coverages: [
+        {coverage_name:"General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"General Liability – General Aggregate",status:"PASS",required_limit:"$2,000,000",found_limit:"$2,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Annapolis", type: "type1", contractor: "Anchor Point Welding", verdict: "NON-COMPLIANT", date: daysAgo(5), expiration: daysFromNow(90), access_agreement: false,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Bumbershoot / Umbrella",status:"FAIL",required_limit:"$2,000,000",found_limit:"$1,000,000",detail:"Found $1,000,000 but $2,000,000 required"}
+      ], endorsements: [
+        {endorsement_name:"Waiver of Subrogation – MGL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: ["Vendor does not have a signed Contractor Access Agreement on file."] },
+
+    // Safe Harbor Port Annapolis — 3 vendors
+    { id: rid(), property: "Safe Harbor Port Annapolis", type: "type2", contractor: "Sailcraft Canvas & Upholstery", verdict: "COMPLIANT", date: daysAgo(20), expiration: daysFromNow(150), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"SRLL with P&I",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Port Annapolis", type: "type1", contractor: "Coastal Engine Works", verdict: "NON-COMPLIANT", date: daysAgo(3), expiration: daysFromNow(60), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Ship Repairers Legal Liability (SRLL)",status:"FAIL",required_limit:"$1,000,000",found_limit:"Not found",detail:"Required coverage not found on certificate"},
+        {coverage_name:"Bumbershoot / Umbrella",status:"FAIL",required_limit:"$2,000,000",found_limit:"$1,000,000",detail:"Found $1,000,000 but $2,000,000 required"}
+      ], endorsements: [
+        {endorsement_name:"Primary & Non-Contributory – MGL & SRLL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Port Annapolis", type: "nonmarine", contractor: "Harbor Janitorial Co.", verdict: "COMPLIANT", date: daysAgo(45), expiration: daysFromNow(10), access_agreement: true,
+      coverages: [
+        {coverage_name:"General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$2,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+
+    // Safe Harbor Brady Mountain — 3 vendors
+    { id: rid(), property: "Safe Harbor Brady Mountain", type: "type1", contractor: "Lakeshore Marine Repair", verdict: "COMPLIANT", date: daysAgo(15), expiration: daysFromNow(200), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Bumbershoot / Umbrella",status:"PASS",required_limit:"$2,000,000",found_limit:"$3,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL & SRLL",status:"PASS",detail:"Endorsement confirmed"},
+        {endorsement_name:"Waiver of Subrogation – Workers Comp",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Brady Mountain", type: "type2", contractor: "Summit Signs & Graphics", verdict: "COMPLIANT WITH EXCEPTION", date: daysAgo(22), expiration: daysFromNow(120), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Business Auto Liability – CSL",status:"PASS",required_limit:"$500,000",found_limit:"$500,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Waiver of Subrogation – Workers Comp",status:"PASS",detail:"Endorsement confirmed",exception:true}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Brady Mountain", type: "nonmarine", contractor: "Mountain View Paving", verdict: "NON-COMPLIANT", date: daysAgo(2), expiration: daysFromNow(300), access_agreement: true,
+      coverages: [
+        {coverage_name:"General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"},
+        {coverage_name:"Workers Comp – Statutory",status:"FAIL",required_limit:"Statutory",found_limit:"Not found",detail:"Required — state law mandates WC for this contractor"}
+      ], endorsements: [
+        {endorsement_name:"Primary & Non-Contributory",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+
+    // Safe Harbor Cabrillo Isle — 2 vendors
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", type: "type1", contractor: "Pacific Hull & Prop", verdict: "COMPLIANT", date: daysAgo(7), expiration: daysFromNow(250), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$2,000,000",detail:"Meets required limit"},
+        {coverage_name:"Ship Repairers Legal Liability (SRLL)",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL & SRLL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", type: "type2", contractor: "SoCal Boat Detailing", verdict: "COMPLIANT", date: daysAgo(18), expiration: daysFromNow(25), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Additional Insured – SHM Holdco on MGL",status:"PASS",detail:"Endorsement confirmed"}
+      ], notes: [] },
+
+    // Safe Harbor Greenport — 2 vendors
+    { id: rid(), property: "Safe Harbor Greenport", type: "type1", contractor: "North Fork Marine Electric", verdict: "COMPLIANT", date: daysAgo(10), expiration: daysFromNow(190), access_agreement: true,
+      coverages: [
+        {coverage_name:"Marine General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"}
+      ], endorsements: [], notes: [] },
+    { id: rid(), property: "Safe Harbor Greenport", type: "nonmarine", contractor: "East End Electrical", verdict: "COMPLIANT WITH EXCEPTION", date: daysAgo(14), expiration: daysFromNow(75), access_agreement: true,
+      coverages: [
+        {coverage_name:"General Liability – Each Occurrence",status:"PASS",required_limit:"$1,000,000",found_limit:"$1,000,000",detail:"Meets required limit"}
+      ], endorsements: [
+        {endorsement_name:"Primary & Non-Contributory",status:"PASS",detail:"Endorsement confirmed",exception:true}
+      ], notes: [] }
+  ];
+
+  // ── Check-In / Check-Out Records ──
+  var checkinRecords = [
+    // Currently on site (no checkout) — these show on the dashboard banner
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Chesapeake Marine Services", checkin: localDt(0, 7, 30), checkout: null, reason: "Marine Work (Retained by Safe Harbor)", location: "Dock C, Slip 14", boat: "Second Wind", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(180), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Bay Area Boat Repair", checkin: localDt(0, 8, 15), checkout: null, reason: "Marine Work (Retained by Member)", location: "A-Dock, Slip 22", boat: "Seas the Day", fees: "Yes", compliance: "COMPLIANT WITH EXCEPTION", expiration: daysFromNow(45), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Port Annapolis", vendor: "Sailcraft Canvas & Upholstery", checkin: localDt(0, 9, 0), checkout: null, reason: "Marine Work (Retained by Member)", location: "B-Dock, Slip 8", boat: "Windchaser", fees: "Yes", compliance: "COMPLIANT", expiration: daysFromNow(150), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Brady Mountain", vendor: "Lakeshore Marine Repair", checkin: localDt(0, 6, 45), checkout: null, reason: "Marine Work (Retained by Safe Harbor)", location: "Service Yard", boat: "", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(200), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", vendor: "Pacific Hull & Prop", checkin: localDt(0, 8, 0), checkout: null, reason: "Marine Work (Retained by Member)", location: "Dry Dock 2", boat: "Pacific Dreamer", fees: "No", compliance: "COMPLIANT", expiration: daysFromNow(250), access_agreement: true, unvalidated: false },
+
+    // Completed visits (last 14 days) — these show in logbook reports
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Chesapeake Marine Services", checkin: localDt(1, 7, 0), checkout: localDt(1, 16, 30), reason: "Marine Work (Retained by Safe Harbor)", location: "Dock C, Slip 14", boat: "Second Wind", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(180), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Tideline Landscaping", checkin: localDt(1, 8, 0), checkout: localDt(1, 12, 0), reason: "Facility Work", location: "Main entrance & parking", boat: "", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(220), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Bay Area Boat Repair", checkin: localDt(2, 9, 15), checkout: localDt(2, 17, 0), reason: "Marine Work (Retained by Member)", location: "A-Dock, Slip 22", boat: "Seas the Day", fees: "Yes", compliance: "COMPLIANT WITH EXCEPTION", expiration: daysFromNow(45), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Chesapeake Marine Services", checkin: localDt(3, 7, 30), checkout: localDt(3, 15, 45), reason: "Marine Work (Retained by Safe Harbor)", location: "Haul-out area", boat: "Fair Winds", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(180), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Quick Fix Plumbing", checkin: localDt(4, 10, 0), checkout: localDt(4, 14, 30), reason: "Facility Work", location: "Restroom building B", boat: "", fees: "N/A", compliance: "UNVALIDATED", expiration: null, access_agreement: false, unvalidated: true },
+    { id: rid(), property: "Safe Harbor Port Annapolis", vendor: "Sailcraft Canvas & Upholstery", checkin: localDt(1, 8, 30), checkout: localDt(1, 15, 0), reason: "Marine Work (Retained by Member)", location: "B-Dock, Slip 8", boat: "Windchaser", fees: "Yes", compliance: "COMPLIANT", expiration: daysFromNow(150), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Port Annapolis", vendor: "Coastal Engine Works", checkin: localDt(3, 7, 0), checkout: localDt(3, 12, 30), reason: "Marine Work (Retained by Member)", location: "C-Dock, Slip 3", boat: "Osprey", fees: "Yes", compliance: "NON-COMPLIANT", expiration: daysFromNow(60), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Port Annapolis", vendor: "Harbor Janitorial Co.", checkin: localDt(2, 6, 0), checkout: localDt(2, 10, 0), reason: "Facility Work", location: "Clubhouse", boat: "", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(10), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Brady Mountain", vendor: "Lakeshore Marine Repair", checkin: localDt(1, 7, 0), checkout: localDt(1, 16, 0), reason: "Marine Work (Retained by Safe Harbor)", location: "Service Yard", boat: "Lake Runner", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(200), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Brady Mountain", vendor: "Summit Signs & Graphics", checkin: localDt(5, 9, 0), checkout: localDt(5, 11, 30), reason: "Facility Work", location: "Office building", boat: "", fees: "N/A", compliance: "COMPLIANT WITH EXCEPTION", expiration: daysFromNow(120), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Brady Mountain", vendor: "Joe's Dock Services", checkin: localDt(6, 8, 0), checkout: localDt(6, 13, 0), reason: "Marine Work (Retained by Member)", location: "Dock 4, Slip 11", boat: "Mountain Mist", fees: "No", compliance: "UNVALIDATED", expiration: null, access_agreement: false, unvalidated: true },
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", vendor: "Pacific Hull & Prop", checkin: localDt(2, 7, 30), checkout: localDt(2, 16, 45), reason: "Marine Work (Retained by Safe Harbor)", location: "Dry Dock 2", boat: "Pacific Dreamer", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(250), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", vendor: "SoCal Boat Detailing", checkin: localDt(4, 8, 0), checkout: localDt(4, 14, 0), reason: "Marine Work (Retained by Member)", location: "Guest dock", boat: "Sol Seeker", fees: "Yes", compliance: "COMPLIANT", expiration: daysFromNow(25), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Greenport", vendor: "North Fork Marine Electric", checkin: localDt(1, 8, 0), checkout: localDt(1, 17, 0), reason: "Marine Work (Retained by Safe Harbor)", location: "Main pier, Slip 6", boat: "North Star", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(190), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Greenport", vendor: "East End Electrical", checkin: localDt(3, 9, 0), checkout: localDt(3, 15, 30), reason: "Facility Work", location: "Dock power stations", boat: "", fees: "N/A", compliance: "COMPLIANT WITH EXCEPTION", expiration: daysFromNow(75), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Tideline Landscaping", checkin: localDt(7, 7, 0), checkout: localDt(7, 11, 0), reason: "Facility Work", location: "Grounds & walkways", boat: "", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(220), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Annapolis", vendor: "Chesapeake Marine Services", checkin: localDt(8, 7, 15), checkout: localDt(8, 16, 0), reason: "Marine Work (Retained by Member)", location: "Dock B, Slip 5", boat: "Tidewater", fees: "Yes", compliance: "COMPLIANT", expiration: daysFromNow(180), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Port Annapolis", vendor: "Sailcraft Canvas & Upholstery", checkin: localDt(10, 8, 0), checkout: localDt(10, 13, 45), reason: "Marine Work (Retained by Member)", location: "A-Dock, Slip 15", boat: "Blue Horizon", fees: "Yes", compliance: "COMPLIANT", expiration: daysFromNow(150), access_agreement: true, unvalidated: false },
+    { id: rid(), property: "Safe Harbor Cabrillo Isle", vendor: "Pacific Hull & Prop", checkin: localDt(7, 7, 0), checkout: localDt(7, 17, 30), reason: "Marine Work (Retained by Safe Harbor)", location: "Haul-out bay", boat: "Catalina Spirit", fees: "N/A", compliance: "COMPLIANT", expiration: daysFromNow(250), access_agreement: true, unvalidated: false }
+  ];
+
+  saveRecords(dashRecords);
+  saveCheckins(checkinRecords);
+  console.log("Demo data seeded: " + dashRecords.length + " dashboard records, " + checkinRecords.length + " check-in records");
+})();
+
+
 updateAlertBadge();
 renderDashboard();
-renderDashboardOnsite();
 </script>
 
 
