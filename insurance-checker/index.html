@@ -415,8 +415,10 @@
     <div class="card" style="margin-top:1rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:0.75rem;">
         <div class="card-title" style="margin-bottom:0;">Currently On Property</div>
-        <div class="sdrop" style="width:220px;"><input type="text" class="sdrop-input sm" id="onsite-filter-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="onsite-prop-sdrop-list"></div></div>
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('onsite-filter-property').value='';renderCheckinOnsite();">Clear Filters</button>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:auto;">
+          <div class="sdrop" style="width:220px;"><input type="text" class="sdrop-input sm" id="onsite-filter-property" placeholder="All Properties" autocomplete="off" /><div class="sdrop-list" id="onsite-prop-sdrop-list"></div></div>
+          <button class="btn btn-outline btn-sm" style="background:#F2F1EF;" onclick="document.getElementById('onsite-filter-property').value='';renderCheckinOnsite();">Clear Filters</button>
+        </div>
       </div>
       <div id="checkin-onsite-area"></div>
     </div>
@@ -439,7 +441,7 @@
             <option value="NON-COMPLIANT">Non-Compliant</option>
           </select>
           <button class="btn btn-gold btn-sm" onclick="exportDashboardFilteredCSV()">Export to Excel</button>
-          <button class="btn btn-outline btn-sm" onclick="clearDashboardFilters()">Clear Filters</button>
+          <button class="btn btn-outline btn-sm" style="background:#F2F1EF;" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
       </div>
       <div id="dash-table-area"></div>
@@ -477,7 +479,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export to Excel
         </button>
-        <button class="btn btn-outline" onclick="clearLogbook()">Clear</button>
+        <button class="btn btn-outline" style="background:#F2F1EF;" onclick="clearLogbook()">Clear</button>
       </div>
     </div>
     <div id="logbook-results" style="display:none;margin-top:1rem;">
@@ -520,8 +522,9 @@ function switchView(v) {
   document.querySelectorAll(".view").forEach(function(el) { el.classList.remove("active"); });
   document.getElementById(v + "-view").classList.add("active");
   var main = document.querySelector(".main");
-  if (v === "dashboard") { main.classList.add("full-width"); main.classList.remove("narrow"); renderDashboard(); }
+  if (v === "dashboard" || v === "reports") { main.classList.add("full-width"); main.classList.remove("narrow"); }
   else { main.classList.remove("full-width"); main.classList.add("narrow"); }
+  if (v === "dashboard") renderDashboard();
   if (v === "checkin") renderCheckinOnsite();
   if (v === "reports") initReportsDropdowns();
 }
