@@ -439,6 +439,11 @@
             <option value="COMPLIANT WITH EXCEPTION">Compliant w/ Exception</option>
             <option value="NON-COMPLIANT">Non-Compliant</option>
           </select>
+          <select class="form-select" id="dash-filter-checkin" style="width:150px;margin-bottom:0;font-size:0.78rem;padding:0.5rem 0.75rem;" onchange="renderDashboard()">
+            <option value="">Check-In Status</option>
+            <option value="onsite">On Site</option>
+            <option value="offsite">Not On Site</option>
+          </select>
           <button class="btn btn-gold btn-sm" onclick="exportDashboardFilteredCSV()">Export to Excel</button>
           <button class="btn btn-outline btn-sm" style="background:#F2F1EF;" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
@@ -1350,6 +1355,7 @@ function clearDashboardFilters() {
   document.getElementById("dash-filter-property").value = "";
   document.getElementById("dash-filter-vendor").value = "";
   document.getElementById("dash-filter-status").value = "";
+  document.getElementById("dash-filter-checkin").value = "";
   renderDashboard();
 }
 
@@ -1363,15 +1369,25 @@ function renderDashboard() {
   var fp = document.getElementById("dash-filter-property").value.trim();
   var fv = document.getElementById("dash-filter-vendor").value.trim();
   var fs = document.getElementById("dash-filter-status").value;
+  var fci = document.getElementById("dash-filter-checkin").value;
+
+  // Build set of currently on-site vendors for check-in filter
+  var checkins = getCheckins();
+  var onsiteSet = {};
+  checkins.forEach(function(ci) {
+    if (ci.checkin && !ci.checkout) onsiteSet[ci.property + "||" + ci.vendor] = true;
+  });
 
   // Property-scoped records for stats
   var propRecs = recs;
   if (fp && MARINA_NAMES.indexOf(fp) !== -1) propRecs = recs.filter(function(r) { return r.property === fp; });
 
-  // Further filter by status and vendor for the table
+  // Further filter by status, vendor, and check-in status for the table
   var filtered = propRecs;
   if (fv) filtered = filtered.filter(function(r) { return r.contractor && r.contractor.toLowerCase().indexOf(fv.toLowerCase()) !== -1; });
   if (fs) filtered = filtered.filter(function(r) { return r.verdict === fs; });
+  if (fci === "onsite") filtered = filtered.filter(function(r) { return onsiteSet[r.property + "||" + r.contractor]; });
+  if (fci === "offsite") filtered = filtered.filter(function(r) { return !onsiteSet[r.property + "||" + r.contractor]; });
 
   // Stats scoped to selected property
   var total = propRecs.length;
@@ -1555,9 +1571,17 @@ function exportDashboardFilteredCSV() {
   var fp = document.getElementById("dash-filter-property").value.trim();
   var fv = document.getElementById("dash-filter-vendor").value.trim();
   var fs = document.getElementById("dash-filter-status").value;
+  var fci = document.getElementById("dash-filter-checkin").value;
   if (fp && MARINA_NAMES.indexOf(fp) !== -1) recs = recs.filter(function(r) { return r.property === fp; });
   if (fv) recs = recs.filter(function(r) { return r.contractor && r.contractor.toLowerCase().indexOf(fv.toLowerCase()) !== -1; });
   if (fs) recs = recs.filter(function(r) { return r.verdict === fs; });
+  if (fci) {
+    var cis = getCheckins();
+    var osSet = {};
+    cis.forEach(function(ci) { if (ci.checkin && !ci.checkout) osSet[ci.property + "||" + ci.vendor] = true; });
+    if (fci === "onsite") recs = recs.filter(function(r) { return osSet[r.property + "||" + r.contractor]; });
+    if (fci === "offsite") recs = recs.filter(function(r) { return !osSet[r.property + "||" + r.contractor]; });
+  }
   if (!recs.length) { alert("No records match the current filters."); return; }
   var suffix = fp ? fp.replace(/[^a-zA-Z0-9]/g, "_") : "filtered";
   downloadCSV(buildDashboardExportRows(recs), "shm-vendor-dashboard-" + suffix + ".csv");
@@ -1996,7 +2020,11 @@ function clearLogbook() {
 // ═══ DEMO DATA SEEDING ═══
 // Seeds localStorage with realistic data if empty. Delete this block for production.
 (function seedDemoData() {
-  if (getRecords().length > 0 || getCheckins().length > 0) return; // Don't overwrite existing data
+  var DEMO_VERSION = "demo-v2";
+  if (localStorage.getItem("shm-demo-version") === DEMO_VERSION) return; // Already seeded this version
+  // Clear old data and seed fresh
+  saveRecords([]);
+  saveCheckins([]);
 
   var now = new Date();
   function daysAgo(n) { var d = new Date(now); d.setDate(d.getDate() - n); return d.toISOString(); }
@@ -2149,6 +2177,7 @@ function clearLogbook() {
 
   saveRecords(dashRecords);
   saveCheckins(checkinRecords);
+  localStorage.setItem("shm-demo-version", DEMO_VERSION);
   console.log("Demo data seeded: " + dashRecords.length + " dashboard records, " + checkinRecords.length + " check-in records");
 })();
 
