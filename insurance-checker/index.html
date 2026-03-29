@@ -384,6 +384,16 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0.75rem;">
         <div>
+          <label class="form-label">Location</label>
+          <input type="text" class="form-input" id="checkin-location" placeholder="Slip, dock, or location" style="margin-bottom:0;" />
+        </div>
+        <div>
+          <label class="form-label">Boat Name</label>
+          <input type="text" class="form-input" id="checkin-boat" placeholder="Boat name" style="margin-bottom:0;" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:0.75rem;">
+        <div>
           <label class="form-label">Check-In Date & Time <span style="color:var(--fail);">*</span></label>
           <input type="datetime-local" class="form-input" id="checkin-datetime" style="margin-bottom:0;" />
         </div>
@@ -428,8 +438,7 @@
             <option value="COMPLIANT WITH EXCEPTION">Compliant w/ Exception</option>
             <option value="NON-COMPLIANT">Non-Compliant</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="exportDashboardCSV()">Export All</button>
-          <button class="btn btn-gold btn-sm" onclick="exportDashboardFilteredCSV()">Export Filtered</button>
+          <button class="btn btn-gold btn-sm" onclick="exportDashboardFilteredCSV()">Export to Excel</button>
           <button class="btn btn-outline btn-sm" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
       </div>
@@ -1725,6 +1734,8 @@ function submitCheckin() {
   var checkoutDt = document.getElementById("checkout-datetime").value;
   var reason = document.getElementById("checkin-reason").value;
   var fees = document.getElementById("checkin-fees").value;
+  var location = document.getElementById("checkin-location").value.trim();
+  var boat = document.getElementById("checkin-boat").value.trim();
 
   var rec = lookupVendor(prop, vendor);
   var unvalidated = !rec;
@@ -1736,6 +1747,8 @@ function submitCheckin() {
     checkin: checkinDt,
     checkout: checkoutDt || null,
     reason: reason,
+    location: location || "",
+    boat: boat || "",
     fees: (reason === "Marine Work (Retained by Member)") ? fees : "N/A",
     compliance: rec ? rec.verdict : "UNVALIDATED",
     expiration: rec ? (rec.expiration || null) : null,
@@ -1768,6 +1781,8 @@ function resetCheckinForm() {
   document.getElementById("checkout-datetime").value = "";
   document.getElementById("checkin-reason").value = "";
   document.getElementById("checkin-fees").value = "";
+  document.getElementById("checkin-location").value = "";
+  document.getElementById("checkin-boat").value = "";
   document.getElementById("fees-field").style.display = "none";
   document.getElementById("checkin-vendor-status").style.display = "none";
   document.getElementById("btn-checkin").disabled = true;
@@ -1911,10 +1926,10 @@ function generateLogbook() {
     var expDisplay = r.expiration || "\u2014";
     var agrDisplay = r.access_agreement ? "<span style=\"color:var(--pass);\">\u2713 Yes</span>" : "<span style=\"color:var(--fail);\">\u2717 No</span>";
     var flagDisplay = r.unvalidated ? "<span style=\"color:var(--warn);\">\u26A0 No insurance on file</span>" : "\u2014";
-    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + feeDisplay + "</td><td>" + expDisplay + "</td><td>" + agrDisplay + "</td><td style=\"font-size:0.75rem;\">" + flagDisplay + "</td></tr>";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + esc(r.location || "\u2014") + "</td><td>" + esc(r.boat || "\u2014") + "</td><td>" + feeDisplay + "</td><td>" + expDisplay + "</td><td>" + agrDisplay + "</td><td style=\"font-size:0.75rem;\">" + flagDisplay + "</td></tr>";
   }).join("");
 
-  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Fees Paid</th><th>Insurance Exp.</th><th>Access Agmt.</th><th>Flags</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Location</th><th>Boat Name</th><th>Fees Paid</th><th>Insurance Exp.</th><th>Access Agmt.</th><th>Flags</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
   resultsDiv.style.display = "block";
   document.getElementById("btn-export-logbook").style.display = "inline-flex";
 
@@ -1926,7 +1941,7 @@ function exportLogbookExcel() {
   var recs = window._logbookData || [];
   if (!recs.length) return;
 
-  var rows = [["Property", "Vendor", "Status at Check-In", "Reason", "Check-In", "Check-Out", "Fees Paid", "Insurance Exp.", "Access Agmt.", "Flags"]];
+  var rows = [["Property", "Vendor", "Status at Check-In", "Reason", "Check-In", "Check-Out", "Location", "Boat Name", "Fees Paid", "Insurance Exp.", "Access Agmt.", "Flags"]];
   recs.forEach(function(r) {
     var ciDt = r.checkin ? new Date(r.checkin).toLocaleString("en-US") : "";
     var coDt = r.checkout ? new Date(r.checkout).toLocaleString("en-US") : "Still on site";
@@ -1938,6 +1953,8 @@ function exportLogbookExcel() {
       r.reason || "",
       ciDt,
       coDt,
+      r.location || "",
+      r.boat || "",
       fees,
       r.expiration || "",
       r.access_agreement ? "Yes" : "No",
