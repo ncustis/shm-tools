@@ -239,7 +239,7 @@
     </div>
     <div class="nav-tab" onclick="switchView('check')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      New Insurance Check
+      New Contractor
     </div>
     <div class="nav-tab" onclick="switchView('reports')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
@@ -1069,17 +1069,22 @@ function addToDashboard() {
   document.getElementById("save-prompt").style.display = "none";
   saveRecord(lastPropertyName, selectedType, lastResult);
   updateAlertBadge();
-  // Brief confirmation
+  resetForm();
   var el = document.getElementById("save-confirm");
   el.textContent = "\u2713 Added to Dashboard";
+  el.style.color = "var(--pass)";
+  el.style.background = "var(--pass-bg)";
   el.style.display = "block";
   setTimeout(function() { el.style.display = "none"; }, 3000);
 }
 
 function skipDashboard() {
   document.getElementById("save-prompt").style.display = "none";
+  resetForm();
   var el = document.getElementById("save-confirm");
-  el.textContent = "Removed — this check was not saved to the dashboard.";
+  el.textContent = "Removed \u2014 this check was not saved to the dashboard.";
+  el.style.color = "var(--text-muted)";
+  el.style.background = "var(--warm-gray)";
   el.style.display = "block";
   setTimeout(function() { el.style.display = "none"; }, 3000);
 }
@@ -1389,7 +1394,7 @@ function renderDashboard() {
       : "<button class='btn btn-sm btn-primary' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"checkinFromDash('" + r.id + "')\">Check‑In</button>";
     return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'>" + checkinBtn + " <button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
   }).join("");
-  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Expiration</th><th>Insurance Checked On</th><th>Non-Compliance Reasons</th><th>Exceptions</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  area.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Property</th><th>Contractor</th><th>Type</th><th>Verdict</th><th>Insurance Expiration</th><th>Insurance Checked On</th><th>Non-Compliance Reasons</th><th>Exceptions</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 // ═══ RENEW & DELETE ═══
