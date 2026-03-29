@@ -429,6 +429,7 @@
             <option value="NON-COMPLIANT">Non-Compliant</option>
           </select>
           <button class="btn btn-outline btn-sm" onclick="exportDashboardCSV()">Export All</button>
+          <button class="btn btn-gold btn-sm" onclick="exportDashboardFilteredCSV()">Export Filtered</button>
           <button class="btn btn-outline btn-sm" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
       </div>
@@ -1489,9 +1490,9 @@ function exportReport() {
   (lastResult.endorsements || []).forEach(function(e) { rows.push([e.endorsement_name || e.coverage_name, e.exception ? "EXCEPTION" : e.status, "", "", e.detail]); });
   downloadCSV(rows, "compliance-report.csv");
 }
-function exportDashboardCSV() {
-  var recs = getRecords(); if (!recs.length) return;
-  var rows = [["Property", "Contractor", "Type", "Verdict", "Expiration", "Date", "Non-Compliance Reasons", "Exceptions"]];
+function buildDashboardExportRows(recs) {
+  var header = ["Property", "Contractor", "Type", "Verdict", "Insurance Expiration", "Insurance Checked On", "Non-Compliance Reasons", "Exceptions"];
+  var rows = [header];
   recs.forEach(function(r) {
     var reasons = [];
     (r.coverages || []).forEach(function(c) { if (!c.exception && (c.status === "FAIL" || c.status === "NOT FOUND")) reasons.push((c.coverage_name || "") + ": " + (c.detail || c.status)); });
@@ -1499,13 +1500,45 @@ function exportDashboardCSV() {
     var exceptions = [];
     (r.coverages || []).forEach(function(c) { if (c.exception) exceptions.push(c.coverage_name || ""); });
     (r.endorsements || []).forEach(function(e) { if (e.exception) exceptions.push(e.endorsement_name || ""); });
-    rows.push([r.property, r.contractor, (REQUIREMENTS[r.type] || {}).label || r.type, r.verdict, r.expiration || "", new Date(r.date).toLocaleDateString(), reasons.join("; "), exceptions.join("; ")]);
+    rows.push([
+      r.property,
+      r.contractor,
+      (REQUIREMENTS[r.type] || {}).label || r.type,
+      r.verdict,
+      r.expiration || "-",
+      new Date(r.date).toLocaleDateString(),
+      reasons.join("; ") || "-",
+      exceptions.join("; ") || "-"
+    ]);
   });
-  downloadCSV(rows, "shm-insurance-repository.csv");
+  return rows;
+}
+
+function exportDashboardCSV() {
+  var recs = getRecords(); if (!recs.length) return;
+  downloadCSV(buildDashboardExportRows(recs), "shm-vendor-dashboard-all.csv");
+}
+
+function exportDashboardFilteredCSV() {
+  var recs = getRecords();
+  var fp = document.getElementById("dash-filter-property").value.trim();
+  var fv = document.getElementById("dash-filter-vendor").value.trim();
+  var fs = document.getElementById("dash-filter-status").value;
+  if (fp && MARINA_NAMES.indexOf(fp) !== -1) recs = recs.filter(function(r) { return r.property === fp; });
+  if (fv) recs = recs.filter(function(r) { return r.contractor && r.contractor.toLowerCase().indexOf(fv.toLowerCase()) !== -1; });
+  if (fs) recs = recs.filter(function(r) { return r.verdict === fs; });
+  if (!recs.length) { alert("No records match the current filters."); return; }
+  var suffix = fp ? fp.replace(/[^a-zA-Z0-9]/g, "_") : "filtered";
+  downloadCSV(buildDashboardExportRows(recs), "shm-vendor-dashboard-" + suffix + ".csv");
 }
 function downloadCSV(rows, fn) {
-  var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c || "").replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
-  var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = fn; a.click();
+  var csv = "\uFEFF" + rows.map(function(r) { return r.map(function(c) {
+    var s = String(c || "").replace(/"/g, '""');
+    // Clean special characters for Excel compatibility
+    s = s.replace(/\u2013/g, "-").replace(/\u2014/g, "-").replace(/\u2018/g, "'").replace(/\u2019/g, "'").replace(/\u201C/g, '"').replace(/\u201D/g, '"').replace(/\u2026/g, "...");
+    return '"' + s + '"';
+  }).join(","); }).join("\n");
+  var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" })); a.download = fn; a.click();
 }
 
 // ═══ SEARCHABLE DROPDOWN COMPONENT ═══
