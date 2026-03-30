@@ -1438,7 +1438,7 @@ function renderDashboard() {
     var isOnsite = checkins.some(function(ci) { return ci.property === r.property && ci.vendor === r.contractor && ci.checkin && !ci.checkout; });
     var onsiteRec = isOnsite ? checkins.find(function(ci) { return ci.property === r.property && ci.vendor === r.contractor && ci.checkin && !ci.checkout; }) : null;
     var checkinBtn = isOnsite
-      ? "<button class='btn btn-sm' style='padding:0.3rem 0.6rem;font-size:0.7rem;background:var(--pass);color:white;' onclick=\"checkoutVendor('" + onsiteRec.id + "');renderDashboard();\">Check‑Out</button>"
+      ? "<button class='btn btn-sm' style='padding:0.3rem 0.6rem;font-size:0.7rem;background:var(--pass);color:white;' onclick=\"checkoutVendor('" + onsiteRec.id + "');\">Check‑Out</button>"
       : "<button class='btn btn-sm btn-primary' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"checkinFromDash('" + r.id + "')\">Check‑In</button>";
     return "<tr><td style='font-weight:500;'>" + esc(r.property) + "</td><td>" + esc(r.contractor) + "</td><td>" + esc((REQUIREMENTS[r.type] || {}).label || r.type) + "</td><td><span class='pill pill-" + vc + "'>" + esc(r.verdict) + "</span></td><td>" + (ec ? "<span class='pill " + ec + "'>" + esc(es) + "</span>" : esc(es)) + "</td><td style='color:var(--text-muted);'>" + d + "</td><td style='font-size:0.72rem;color:var(--text-muted);max-width:200px;'>" + esc(reasonsStr) + "</td><td style='font-size:0.72rem;color:#1A75CF;max-width:180px;'>" + esc(exceptionsStr) + "</td><td style='white-space:nowrap;'>" + checkinBtn + " <button class='btn btn-sm btn-gold' style='padding:0.3rem 0.6rem;font-size:0.7rem;' onclick=\"renewRecord('" + r.id + "')\">Renew</button> <button class='btn btn-sm btn-outline' style='padding:0.3rem 0.6rem;font-size:0.7rem;color:var(--fail);border-color:var(--fail-bg);' onclick=\"deleteRecord('" + r.id + "')\">Delete</button></td></tr>";
   }).join("");
@@ -1783,24 +1783,42 @@ function submitCheckin() {
   var location = document.getElementById("checkin-location").value.trim();
   var boat = document.getElementById("checkin-boat").value.trim();
 
-  var rec = lookupVendor(prop, vendor);
-  var unvalidated = !rec;
+  var dashRec = lookupVendor(prop, vendor);
+  var unvalidated = !dashRec;
   var recs = getCheckins();
-  recs.push({
-    id: Date.now() + "-" + Math.random().toString(36).substr(2, 6),
-    property: prop,
-    vendor: vendor,
-    checkin: checkinDt,
-    checkout: checkoutDt || null,
-    reason: reason,
-    location: location || "",
-    boat: boat || "",
-    fees: (reason === "Marine Work (Retained by Member)") ? fees : "N/A",
-    compliance: rec ? rec.verdict : "UNVALIDATED",
-    expiration: rec ? (rec.expiration || null) : null,
-    access_agreement: rec ? rec.access_agreement : false,
-    unvalidated: unvalidated
-  });
+
+  if (editingCheckinId) {
+    // Update existing record
+    var idx = recs.findIndex(function(r) { return r.id === editingCheckinId; });
+    if (idx !== -1) {
+      recs[idx].property = prop;
+      recs[idx].vendor = vendor;
+      recs[idx].checkin = checkinDt;
+      recs[idx].checkout = checkoutDt || null;
+      recs[idx].reason = reason;
+      recs[idx].location = location || "";
+      recs[idx].boat = boat || "";
+      recs[idx].fees = (reason === "Marine Work (Retained by Member)") ? fees : "N/A";
+    }
+    editingCheckinId = null;
+  } else {
+    // New record
+    recs.push({
+      id: Date.now() + "-" + Math.random().toString(36).substr(2, 6),
+      property: prop,
+      vendor: vendor,
+      checkin: checkinDt,
+      checkout: checkoutDt || null,
+      reason: reason,
+      location: location || "",
+      boat: boat || "",
+      fees: (reason === "Marine Work (Retained by Member)") ? fees : "N/A",
+      compliance: dashRec ? dashRec.verdict : "UNVALIDATED",
+      expiration: dashRec ? (dashRec.expiration || null) : null,
+      access_agreement: dashRec ? dashRec.access_agreement : false,
+      unvalidated: unvalidated
+    });
+  }
   saveCheckins(recs);
 
   var el = document.getElementById("checkin-confirm");
@@ -1821,6 +1839,7 @@ function submitCheckin() {
 }
 
 function resetCheckinForm() {
+  editingCheckinId = null;
   document.getElementById("checkin-property").value = "";
   document.getElementById("checkin-vendor").value = "";
   document.getElementById("checkin-datetime").value = "";
@@ -1832,16 +1851,49 @@ function resetCheckinForm() {
   document.getElementById("fees-field").style.display = "none";
   document.getElementById("checkin-vendor-status").style.display = "none";
   document.getElementById("btn-checkin").disabled = true;
+  document.getElementById("btn-checkin").innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Check In';
 }
 
+var editingCheckinId = null;
+
 function checkoutVendor(id) {
+  editCheckinRecord(id, true);
+}
+
+function editCheckinRecord(id, isCheckout) {
   var recs = getCheckins();
   var rec = recs.find(function(r) { return r.id === id; });
-  if (rec) {
-    rec.checkout = localNow();
-    saveCheckins(recs);
-    renderCheckinOnsite();
+  if (!rec) return;
+
+  editingCheckinId = id;
+  switchView("checkin");
+
+  // Pre-fill all fields from the existing record
+  document.getElementById("checkin-property").value = rec.property;
+  document.getElementById("checkin-vendor").value = rec.vendor;
+  document.getElementById("checkin-datetime").value = rec.checkin || "";
+  document.getElementById("checkout-datetime").value = isCheckout ? localNow() : (rec.checkout || "");
+  document.getElementById("checkin-location").value = rec.location || "";
+  document.getElementById("checkin-boat").value = rec.boat || "";
+
+  // Set reason and show fees if needed
+  document.getElementById("checkin-reason").value = rec.reason || "";
+  if (rec.reason === "Marine Work (Retained by Member)") {
+    document.getElementById("fees-field").style.display = "block";
+    document.getElementById("checkin-fees").value = rec.fees || "";
+  } else {
+    document.getElementById("fees-field").style.display = "none";
+    document.getElementById("checkin-fees").value = "";
   }
+
+  // Update vendor status display
+  updateCheckinVendorStatus();
+
+  // Change button label
+  document.getElementById("btn-checkin").innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg> Save Changes';
+
+  checkCheckinReady();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function renderCheckinOnsite() {
@@ -1957,10 +2009,10 @@ function generateLogbook() {
     var expDisplay = r.expiration || "\u2014";
     var agrDisplay = r.access_agreement ? "<span style=\"color:var(--pass);\">\u2713 Yes</span>" : "<span style=\"color:var(--fail);\">\u2717 No</span>";
     var flagDisplay = r.unvalidated ? "<span style=\"color:var(--warn);\">\u26A0 No insurance on file</span>" : "\u2014";
-    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + esc(r.location || "\u2014") + "</td><td>" + esc(r.boat || "\u2014") + "</td><td>" + feeDisplay + "</td><td>" + expDisplay + "</td><td>" + agrDisplay + "</td><td style=\"font-size:0.75rem;\">" + flagDisplay + "</td></tr>";
+    return "<tr><td style=\"font-weight:500;\">" + esc(r.property) + "</td><td>" + esc(r.vendor) + "</td><td><span class=\"pill pill-" + vc + "\">" + esc(r.compliance) + "</span></td><td>" + esc(r.reason || "\u2014") + "</td><td>" + ciDt + "</td><td>" + coDt + "</td><td>" + esc(r.location || "\u2014") + "</td><td>" + esc(r.boat || "\u2014") + "</td><td>" + feeDisplay + "</td><td>" + expDisplay + "</td><td>" + agrDisplay + "</td><td style=\"font-size:0.75rem;\">" + flagDisplay + "</td><td><button class=\"btn btn-sm btn-outline\" style=\"padding:0.25rem 0.55rem;font-size:0.7rem;\" onclick=\"editCheckinRecord('" + r.id + "', false)\">Edit</button></td></tr>";
   }).join("");
 
-  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Location</th><th>Boat Name</th><th>Fees Paid</th><th>Insurance Exp.</th><th>Access Agmt.</th><th>Flags</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  area.innerHTML = "<div class=\"table-wrap\"><table><thead><tr><th>Property</th><th>Vendor</th><th>Status at Check-In</th><th>Reason</th><th>Check-In</th><th>Check-Out</th><th>Location</th><th>Boat Name</th><th>Fees Paid</th><th>Insurance Exp.</th><th>Access Agmt.</th><th>Flags</th><th>Actions</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
   resultsDiv.style.display = "block";
   document.getElementById("btn-export-logbook").style.display = "inline-flex";
 
